@@ -1,0 +1,372 @@
+{
+  "name": "Lembrete, Cancelamento e Remarcação",
+  "nodes": [
+    {
+      "id": "f91c7588-798b-45b7-a29f-0f9c74253b76",
+      "name": "Disparar Lembrete Diário às 9h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [240, 300],
+      "parameters": { "rule": { "interval": [{ "field": "days", "triggerAtHour": 9, "triggerAtMinute": 0 }] } }
+    },
+    {
+      "id": "8383ea32-3357-48d2-a3a2-07d6d589d641",
+      "name": "Buscar Agendamentos de Amanhã",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [460, 300],
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
+        "returnAll": true,
+        "timeMin": "={{ $today.plus(1, 'days') }}",
+        "timeMax": "={{ $today.plus(2, 'days') }}"
+      }
+    },
+    {
+      "id": "a032a761-5816-45f8-b072-18190d6bd786",
+      "name": "Processar Cada Agendamento",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [700, 300],
+      "parameters": { "batchSize": 1 }
+    },
+    {
+      "id": "9b2e2e03-ff40-499a-a85d-24660b55c821",
+      "name": "Buscar Dados do Cliente na Planilha",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [960, 140],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos WhatsApp" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos" },
+        "filtersUI": { "values": [{ "lookupColumn": "event_id", "lookupValue": "={{ $json.id }}" }] },
+        "options": { "returnFirstMatch": true }
+      }
+    },
+    {
+      "id": "6946c80f-1493-4901-967c-4f0ebf935d12",
+      "name": "Enviar Lembrete no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [1180, 140],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $json.telefone }}",
+        "messageType": "text",
+        "textBody": "=Oi {{ $json.nome }}! Passando para lembrar do seu horário de {{ $json.servico }} amanhã. Você confirma, quer cancelar ou prefere remarcar?"
+      }
+    },
+    {
+      "id": "418ae243-dc2c-4d56-b8cb-fc75c0f8e4c5",
+      "name": "Aguardar Resposta do Cliente",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1400, 140],
+      "parameters": { "resume": "webhook" }
+    },
+    {
+      "id": "96718f6d-a461-45a2-956b-962669d16cd2",
+      "name": "Normalizar Resposta do Lembrete",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [1620, 140],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            { "id": "resposta_cliente", "name": "resposta_cliente", "value": "={{ $json.body?.messages?.[0]?.text?.body ?? $json.messages?.[0]?.text?.body ?? \"\" }}", "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "80ac8642-f72e-40a0-9ba4-3a3fbc418692",
+      "name": "Classificar Resposta do Lembrete",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [1840, 140],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Data e hora atuais: {{ $now.toISO() }}\nResposta do cliente ao lembrete: {{ $json.resposta_cliente }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Você classifica a resposta de um cliente a um lembrete de agendamento de um pequeno negócio local em uma de três categorias: \"confirmar\" (o cliente confirmou o horário), \"cancelar\" (o cliente não vai mais) ou \"remarcar\" (o cliente quer outro dia/horário). Se o cliente quiser remarcar e sugerir um novo dia/horário, converta para data e hora absolutas em ISO 8601, usando a data e hora atuais informadas como referência, assumindo 1 hora de duração. Gere também um texto curto com a nova data e horário por extenso em português, para usar na resposta ao cliente. Se não for possível classificar com clareza, responda decisao como \"indefinido\"."
+        }
+      }
+    },
+    {
+      "id": "61b4b5e6-ea4f-4ef1-8ac6-e89421c0dd5d",
+      "name": "Modelo Claude para Classificação",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [1840, 320],
+      "parameters": {
+        "model": { "__rl": true, "mode": "list", "value": "claude-sonnet-5", "cachedResultName": "Claude Sonnet 5" },
+        "options": { "temperature": 0.1 }
+      }
+    },
+    {
+      "id": "ed75a89f-c2b0-47c7-9090-3bcaeb544df7",
+      "name": "Parser Estruturado de Classificação",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [2020, 320],
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{ \"decisao\": \"confirmar\", \"novo_horario_inicio\": \"2026-09-19T10:00:00\", \"novo_horario_fim\": \"2026-09-19T11:00:00\", \"resposta_sugerida\": \"sexta-feira, dia 19 de setembro, às 10h\" }"
+      }
+    },
+    {
+      "id": "5b51591b-21f2-4f7f-a3e3-a0d2d58cc8df",
+      "name": "Confirmar, Cancelar ou Remarcar?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [2060, 140],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            { "conditions": { "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.output.decisao }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "confirmar" }], "combinator": "and" } },
+            { "conditions": { "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.output.decisao }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "cancelar" }], "combinator": "and" } },
+            { "conditions": { "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.output.decisao }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "remarcar" }], "combinator": "and" } }
+          ]
+        },
+        "options": { "fallbackOutput": "extra", "renameFallbackOutput": "Não Entendi" }
+      }
+    },
+    {
+      "id": "99427cd0-6d20-4039-8c4c-145843fc2416",
+      "name": "Enviar Confirmação Final no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [2300, -80],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
+        "messageType": "text",
+        "textBody": "=Perfeito, {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Seu horário está confirmado. Até lá! 😊"
+      }
+    },
+    {
+      "id": "700a78b4-7a24-49e8-ac6a-2b907f037f8f",
+      "name": "Cancelar Evento no Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [2300, 120],
+      "parameters": {
+        "resource": "event",
+        "operation": "delete",
+        "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
+        "eventId": "={{ $('Buscar Dados do Cliente na Planilha').item.json.event_id }}"
+      }
+    },
+    {
+      "id": "1e2b6d34-f089-4fa9-86bb-7f71f965c1db",
+      "name": "Enviar Confirmação de Cancelamento no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [2520, 120],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
+        "messageType": "text",
+        "textBody": "=Tudo bem, {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Seu horário foi cancelado. Quando quiser remarcar é só chamar por aqui. 😊"
+      }
+    },
+    {
+      "id": "9ccb4bbe-5f13-4d54-baf8-0e316e02e695",
+      "name": "Verificar Novo Horário Disponível",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [2300, 320],
+      "parameters": {
+        "resource": "calendar",
+        "operation": "availability",
+        "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
+        "timeMin": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}",
+        "timeMax": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_fim }}"
+      }
+    },
+    {
+      "id": "84f5cdcb-155d-40bf-a025-6ace428778a0",
+      "name": "Novo Horário Disponível?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [2520, 320],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "leftValue": "={{ $json.available }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "bb62b991-7d6f-444b-92db-8890a280bf49",
+      "name": "Atualizar Evento no Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [2740, 220],
+      "parameters": {
+        "resource": "event",
+        "operation": "update",
+        "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
+        "eventId": "={{ $('Buscar Dados do Cliente na Planilha').item.json.event_id }}",
+        "useDefaultReminders": true,
+        "updateFields": {
+          "start": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}",
+          "end": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_fim }}"
+        }
+      }
+    },
+    {
+      "id": "fa42763a-09bd-4a62-bd83-8984d025879e",
+      "name": "Atualizar Data na Planilha",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [2960, 220],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos WhatsApp" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": ["event_id"],
+          "value": {
+            "event_id": "={{ $('Buscar Dados do Cliente na Planilha').item.json.event_id }}",
+            "data_hora": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}"
+          },
+          "schema": [
+            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "data_hora", "displayName": "data_hora", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "9efba61a-888a-4bfa-b56e-c77ccd4a5964",
+      "name": "Enviar Confirmação de Remarcação no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [3180, 220],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
+        "messageType": "text",
+        "textBody": "=Prontinho, {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Seu horário foi remarcado para {{ $('Classificar Resposta do Lembrete').item.json.output.resposta_sugerida }}. Até lá! 😊"
+      }
+    },
+    {
+      "id": "bf5456c7-5523-4921-9056-9f52592b3428",
+      "name": "Pedir Outro Horário no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [2740, 420],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
+        "messageType": "text",
+        "textBody": "Esse novo horário já está ocupado. Pode me sugerir outro dia ou horário?"
+      }
+    },
+    {
+      "id": "ec5114cb-c221-4c2e-aa46-4769890232bd",
+      "name": "Pedir Esclarecimento no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [2300, 560],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
+        "messageType": "text",
+        "textBody": "Desculpa, não entendi sua resposta. Você quer confirmar, cancelar ou remarcar o horário?"
+      }
+    },
+    {
+      "id": "b3bc20d1-4c32-413c-baf4-2e197e9a0ffc",
+      "name": "Sticky Note 80164296",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "parameters": { "content": "## 1. Buscar agendamentos de amanhã\nSchedule Trigger (todo dia às 9h) + Google Calendar getAll, processando um agendamento por vez.", "color": 4 }
+    },
+    {
+      "id": "6c48eb8c-3a2c-4c40-aea2-95f1073c0df0",
+      "name": "Sticky Note ad250f53",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [100, 560],
+      "parameters": { "content": "## 2. Enviar lembrete e aguardar resposta\nBusca o cliente na planilha, envia o lembrete no WhatsApp e aguarda a resposta (Wait node, resume via webhook).", "color": 5 }
+    },
+    {
+      "id": "06c5f9e1-14fb-4a29-9408-147bd48374f0",
+      "name": "Sticky Note c8220043",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [100, 816],
+      "parameters": { "content": "## 3. Classificar a resposta\nAI Agent (Claude) classifica em confirmar / cancelar / remarcar.", "color": 3 }
+    },
+    {
+      "id": "9d3a927a-e7bf-4405-bdf7-c14712419db2",
+      "name": "Sticky Note e9ca289b",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [100, 1072],
+      "parameters": { "content": "## 4. Executar a decisão\nConfirma, cancela o evento, ou busca novo horário e atualiza o evento (Update) e a planilha.", "color": 7 }
+    }
+  ],
+  "connections": {
+    "Disparar Lembrete Diário às 9h": { "main": [[{ "node": "Buscar Agendamentos de Amanhã", "type": "main", "index": 0 }]] },
+    "Buscar Agendamentos de Amanhã": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Buscar Dados do Cliente na Planilha": { "main": [[{ "node": "Enviar Lembrete no WhatsApp", "type": "main", "index": 0 }]] },
+    "Enviar Lembrete no WhatsApp": { "main": [[{ "node": "Aguardar Resposta do Cliente", "type": "main", "index": 0 }]] },
+    "Aguardar Resposta do Cliente": { "main": [[{ "node": "Normalizar Resposta do Lembrete", "type": "main", "index": 0 }]] },
+    "Normalizar Resposta do Lembrete": { "main": [[{ "node": "Classificar Resposta do Lembrete", "type": "main", "index": 0 }]] },
+    "Classificar Resposta do Lembrete": { "main": [[{ "node": "Confirmar, Cancelar ou Remarcar?", "type": "main", "index": 0 }]] },
+    "Modelo Claude para Classificação": { "ai_languageModel": [[{ "node": "Classificar Resposta do Lembrete", "type": "ai_languageModel", "index": 0 }]] },
+    "Parser Estruturado de Classificação": { "ai_outputParser": [[{ "node": "Classificar Resposta do Lembrete", "type": "ai_outputParser", "index": 0 }]] },
+    "Confirmar, Cancelar ou Remarcar?": {
+      "main": [
+        [{ "node": "Enviar Confirmação Final no WhatsApp", "type": "main", "index": 0 }],
+        [{ "node": "Cancelar Evento no Calendar", "type": "main", "index": 0 }],
+        [{ "node": "Verificar Novo Horário Disponível", "type": "main", "index": 0 }],
+        [{ "node": "Pedir Esclarecimento no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Enviar Confirmação Final no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Processar Cada Agendamento": { "main": [[], [{ "node": "Buscar Dados do Cliente na Planilha", "type": "main", "index": 0 }]] },
+    "Cancelar Evento no Calendar": { "main": [[{ "node": "Enviar Confirmação de Cancelamento no WhatsApp", "type": "main", "index": 0 }]] },
+    "Enviar Confirmação de Cancelamento no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Verificar Novo Horário Disponível": { "main": [[{ "node": "Novo Horário Disponível?", "type": "main", "index": 0 }]] },
+    "Novo Horário Disponível?": {
+      "main": [
+        [{ "node": "Atualizar Evento no Calendar", "type": "main", "index": 0 }],
+        [{ "node": "Pedir Outro Horário no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Atualizar Evento no Calendar": { "main": [[{ "node": "Atualizar Data na Planilha", "type": "main", "index": 0 }]] },
+    "Atualizar Data na Planilha": { "main": [[{ "node": "Enviar Confirmação de Remarcação no WhatsApp", "type": "main", "index": 0 }]] },
+    "Enviar Confirmação de Remarcação no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Pedir Outro Horário no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Pedir Esclarecimento no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

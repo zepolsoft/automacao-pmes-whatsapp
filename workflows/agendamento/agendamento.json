@@ -1,0 +1,215 @@
+{
+  "name": "Agendamento via WhatsApp",
+  "nodes": [
+    {
+      "id": "e33dcb56-e469-4ec7-b2db-cba2107ed33d",
+      "name": "Receber Mensagem WhatsApp",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": { "updates": ["messages"] }
+    },
+    {
+      "id": "04225259-734f-46b7-adc6-ab9bbb39c076",
+      "name": "Normalizar Dados da Mensagem",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [540, 300],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            { "id": "telefone", "name": "telefone", "value": "={{ $json.messages?.[0]?.from ?? \"\" }}", "type": "string" },
+            { "id": "nome", "name": "nome", "value": "={{ $json.contacts?.[0]?.profile?.name ?? \"Cliente\" }}", "type": "string" },
+            { "id": "mensagem", "name": "mensagem", "value": "={{ $json.messages?.[0]?.text?.body ?? \"\" }}", "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cc46c976-8f47-453b-97e6-e8e709bbcb3e",
+      "name": "Interpretar Intenção do Cliente",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [780, 300],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Data e hora atuais: {{ $now.toISO() }}\nMensagem do cliente: {{ $json.mensagem }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Você é o assistente de agendamento de um pequeno negócio local (barbearia, clínica, dentista ou academia) que atende clientes pelo WhatsApp. A partir da mensagem do cliente, identifique a intenção (agendar, cancelar, remarcar, duvida), o serviço desejado e a data/horário preferido, convertendo datas relativas (ex.: \"amanhã\", \"sexta que vem\") para data e hora absolutas no formato ISO 8601, usando a data e hora atuais informadas como referência. Assuma 1 hora de duração para o serviço, a menos que o cliente diga outra coisa. Gere também um texto curto com a data e o horário por extenso em português, para ser usado na resposta ao cliente."
+        }
+      }
+    },
+    {
+      "id": "83773e21-8701-4c19-bdec-ade87c3cfb8f",
+      "name": "Modelo Claude",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [780, 480],
+      "parameters": {
+        "model": { "__rl": true, "mode": "list", "value": "claude-sonnet-5", "cachedResultName": "Claude Sonnet 5" }
+      }
+    },
+    {
+      "id": "afea7b23-184d-4bfa-b3e6-37652593ae44",
+      "name": "Parser Estruturado de Agendamento",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [960, 480],
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{ \"intencao\": \"agendar\", \"servico\": \"corte de cabelo\", \"nome_cliente\": \"João Silva\", \"data_hora_inicio\": \"2026-09-18T15:00:00\", \"data_hora_fim\": \"2026-09-18T16:00:00\", \"confirmacao_texto\": \"quinta-feira, dia 18 de setembro, às 15h\" }"
+      }
+    },
+    {
+      "id": "82c93033-312e-4671-839c-1ea3d7ce0fe8",
+      "name": "Verificar Disponibilidade",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [1080, 300],
+      "parameters": {
+        "resource": "calendar",
+        "operation": "availability",
+        "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
+        "timeMin": "={{ $json.output.data_hora_inicio }}",
+        "timeMax": "={{ $json.output.data_hora_fim }}"
+      }
+    },
+    {
+      "id": "393c9956-2dbf-4f95-92d8-583c65f8b807",
+      "name": "Horário Disponível?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1300, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "leftValue": "={{ $json.available }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "007393cf-ea79-4191-837a-12632b79b04e",
+      "name": "Criar Evento no Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [1560, 180],
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
+        "start": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
+        "end": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_fim }}",
+        "useDefaultReminders": true,
+        "additionalFields": {
+          "summary": "={{ $('Interpretar Intenção do Cliente').item.json.output.servico }} - {{ $('Interpretar Intenção do Cliente').item.json.output.nome_cliente }}",
+          "description": "={{ 'Agendado via WhatsApp. Telefone: ' + $('Normalizar Dados da Mensagem').item.json.telefone }}"
+        }
+      }
+    },
+    {
+      "id": "8f83ef0d-907a-4f39-bcda-0db254646308",
+      "name": "Salvar Cliente na Planilha",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1780, 180],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos WhatsApp" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nome": "={{ $('Interpretar Intenção do Cliente').item.json.output.nome_cliente }}",
+            "telefone": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
+            "servico": "={{ $('Interpretar Intenção do Cliente').item.json.output.servico }}",
+            "data_hora": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
+            "event_id": "={{ $json.id }}"
+          },
+          "schema": [
+            { "id": "nome", "displayName": "nome", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "servico", "displayName": "servico", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "data_hora", "displayName": "data_hora", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        }
+      }
+    },
+    {
+      "id": "48640630-ce9a-469f-88ca-dbcbedfa70be",
+      "name": "Confirmar Agendamento no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [2000, 180],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
+        "messageType": "text",
+        "textBody": "=Prontinho! Seu horário para {{ $('Interpretar Intenção do Cliente').item.json.output.servico }} ficou confirmado para {{ $('Interpretar Intenção do Cliente').item.json.output.confirmacao_texto }}. Até lá! 😊"
+      }
+    },
+    {
+      "id": "208f6d39-f75d-435a-bedf-57fdbcf51ffd",
+      "name": "Sugerir Outro Horário no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [1560, 420],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
+        "messageType": "text",
+        "textBody": "Esse horário já está ocupado. Pode me dizer outro dia ou horário que funcione para você que eu já verifico a disponibilidade? 🙂"
+      }
+    },
+    {
+      "id": "94e1f3a3-9ba3-4cb2-b621-96610228fcc4",
+      "name": "Sticky Note b7531c55",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "parameters": { "content": "## 1. Receber e interpretar a mensagem\nWebhook do WhatsApp (Meta Cloud API) + Set de normalização + AI Agent (Claude) que extrai intenção, serviço e data/horário.", "color": 4 }
+    },
+    {
+      "id": "d1af1977-74ed-42e2-a96f-98619e48b894",
+      "name": "Sticky Note 2fcbabac",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [100, 560],
+      "parameters": { "content": "## 2. Verificar e criar o evento\nConsulta disponibilidade no Google Calendar e, se livre, cria o evento.", "color": 5 }
+    },
+    {
+      "id": "67bfa38e-f145-4da3-af4d-c258b86de731",
+      "name": "Sticky Note ca9531d3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [100, 816],
+      "parameters": { "content": "## 3. Salvar e responder\nSalva os dados do cliente na planilha e confirma (ou sugere outro horário) no WhatsApp.", "color": 3 }
+    }
+  ],
+  "connections": {
+    "Receber Mensagem WhatsApp": { "main": [[{ "node": "Normalizar Dados da Mensagem", "type": "main", "index": 0 }]] },
+    "Normalizar Dados da Mensagem": { "main": [[{ "node": "Interpretar Intenção do Cliente", "type": "main", "index": 0 }]] },
+    "Interpretar Intenção do Cliente": { "main": [[{ "node": "Verificar Disponibilidade", "type": "main", "index": 0 }]] },
+    "Modelo Claude": { "ai_languageModel": [[{ "node": "Interpretar Intenção do Cliente", "type": "ai_languageModel", "index": 0 }]] },
+    "Parser Estruturado de Agendamento": { "ai_outputParser": [[{ "node": "Interpretar Intenção do Cliente", "type": "ai_outputParser", "index": 0 }]] },
+    "Verificar Disponibilidade": { "main": [[{ "node": "Horário Disponível?", "type": "main", "index": 0 }]] },
+    "Horário Disponível?": {
+      "main": [
+        [{ "node": "Criar Evento no Calendar", "type": "main", "index": 0 }],
+        [{ "node": "Sugerir Outro Horário no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Criar Evento no Calendar": { "main": [[{ "node": "Salvar Cliente na Planilha", "type": "main", "index": 0 }]] },
+    "Salvar Cliente na Planilha": { "main": [[{ "node": "Confirmar Agendamento no WhatsApp", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

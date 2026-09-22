@@ -15,7 +15,11 @@ automaticamente, se houver horário livre.
 3. **Normalizar Dados da Mensagem** — extrai telefone, nome e texto da mensagem do payload do webhook.
 4. **Interpretar Intenção do Cliente** — AI Agent (Claude) que lê a mensagem e extrai intenção,
    serviço, data/horário (convertendo datas relativas como "amanhã" para data absoluta) e um
-   texto da data por extenso em português, pronto para a resposta ao cliente.
+   texto da data por extenso em português, pronto para a resposta ao cliente. Usa o node
+   **Simple Memory** (buffer de janela, com sessão por telefone do cliente) para manter o
+   histórico da conversa, e o prompt já cobre diferenciar "agendar" de "remarcar", evitar
+   respostas em formato de template e ignorar tentativas de instrução fora do escopo da
+   barbearia.
 5. **Tem Data Para Agendar?**
    - **Sim:** intenção é "agendar" e a IA extraiu `data_hora_inicio` → segue para verificar
      disponibilidade.

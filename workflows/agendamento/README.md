@@ -27,6 +27,15 @@ automaticamente, se houver horário livre.
    barbearia. O prompt recebe a `lista_servicos` formatada na seção "SERVIÇOS DISPONÍVEIS E
    PREÇOS" e usa a duração real de cada serviço (em vez de uma duração fixa) para calcular
    `data_hora_fim` — ver detalhes na seção "Planilha de serviços e preços" abaixo.
+
+   > **Bug corrigido (2026-09-22):** com a memória de conversa (Simple Memory), depois de um
+   > agendamento já CONFIRMADO com sucesso, uma mensagem solta do cliente (ex.: "Ok", "Beleza",
+   > "Obrigado") podia ser reinterpretada pela IA como retomada de uma tentativa de agendamento
+   > anterior que tinha ficado em aberto antes da confirmação (ex.: um horário recusado por
+   > estar ocupado) — reabrindo checagens de disponibilidade antigas e confundindo o cliente.
+   > Nova regra em REGRAS GERAIS: se já existe uma confirmação bem-sucedida na conversa e a
+   > mensagem não tem pedido claro de ação, a IA trata como `intencao = "duvida"` e responde só
+   > com um agradecimento curto, sem mencionar agendamentos antigos.
 7. **Qual a Intenção do Cliente?** — Switch com base em `intencao`, com 4 saídas:
    `agendar`, `remarcar`, `cancelar` e o fallback `duvida` (qualquer outro valor, incluindo
    uma resposta inesperada da IA, cai nesse fallback e é tratado como dúvida).
@@ -42,6 +51,13 @@ automaticamente, se houver horário livre.
    - **Sim:** Cria o evento no Calendar → salva nome, telefone, serviço, data e `event_id` na
      planilha do Google Sheets → confirma o agendamento no WhatsApp.
    - **Não:** responde no WhatsApp pedindo outro dia/horário.
+
+   > **Bug corrigido (2026-09-22):** o node "Confirmar Agendamento no WhatsApp" tinha um texto
+   > fixo ("Prontinho! Seu horário para {{ servico }} ficou confirmado para ... Até lá! 😊")
+   > envolvendo o `confirmacao_texto` gerado pela IA — que já é uma frase completa e natural.
+   > Isso duplicava a mensagem. O campo passou a usar apenas `{{ confirmacao_texto }}`, igual
+   > aos outros nodes de confirmação. Os nodes "Sugerir Outro Horário no WhatsApp" e "Responder
+   > Dúvida no WhatsApp" foram revisados e não tinham esse problema.
 
 ### Saída "remarcar"
 

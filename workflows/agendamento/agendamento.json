@@ -370,7 +370,7 @@
         "operation": "send",
         "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
         "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
-        "textBody": "=Prontinho! Sua remarcação ficou assim: {{ $('Interpretar Intenção do Cliente').item.json.output.confirmacao_texto }}. Até lá! 😊",
+        "textBody": "={{ $('Interpretar Intenção do Cliente').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
     },

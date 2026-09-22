@@ -25,36 +25,37 @@ dele: confirmar, cancelar ou remarcar.
       - **Não entendi (fallback):** pede para o cliente esclarecer a resposta.
    6. Volta para o próximo agendamento do lote.
 
-## Ajustes de configuração alinhados com `agendamento.json`
+## Histórico de correções
 
-Este workflow foi revisado e alinhado às convenções de configuração de node usadas em
-`workflows/agendamento/agendamento.json`:
+- **2026-09-22 — Lembretes/atualizações duplicadas na planilha (causa raiz):**
+  - **Buscar Dados do Cliente na Planilha** (Google Sheets) estava sem `resource`/`operation`/
+    filtro nenhum configurado (lia sem localizar a linha certa). Corrigido para
+    `resource: "sheet"`, `operation: "read"`, com filtro por `event_id`
+    (`lookupColumn: "event_id"`, `lookupValue: "={{ $json.id }}"`, usando o `id` do evento do
+    Google Calendar em processamento no loop "Processar Cada Agendamento") e
+    `options.returnFirstMatch: true`, garantindo 1 linha por evento.
+  - **Atualizar Data na Planilha** (Google Sheets) estava com `columns.matchingColumns: []`
+    (vazio) — sem coluna de correspondência, o Update do Google Sheets cria uma linha nova em
+    vez de atualizar a existente, o que gerou linhas duplicadas por telefone a cada remarcação.
+    Corrigido para `matchingColumns: ["event_id"]`. O node também reescrevia a data **antiga**
+    (lida de `Buscar Dados do Cliente na Planilha`) em vez da nova data remarcada; corrigido
+    para gravar `$('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio`
+    na coluna `data`.
+  - Esses dois nodes já haviam sido alinhados nas convenções de `agendamento.json` (`resource`
+    explícito, filtro por `event_id`, `matchingColumns`) numa revisão anterior, mas a
+    configuração foi resetada por edições feitas depois diretamente no editor do n8n — por isso
+    a correção foi reaplicada e confirmada como persistente.
+- **2026-09-22 — Ajustes de convenção pontuais que permanecem ativos:** as saídas do Switch
+  "Confirmar, Cancelar ou Remarcar?" têm `renameOutput`/`outputKey` (`confirmar`/`cancelar`/
+  `remarcar`) e as settings do workflow têm `timezone: "America/Sao_Paulo"` (usado pelas
+  expressões `$today`/`$now`) e `callerPolicy: "workflowsFromSameOwner"`, alinhado com
+  `agendamento.json`.
 
-- **Buscar Dados do Cliente na Planilha** (Google Sheets) — estava sem `resource`/`operation`
-  definidos e sem filtro; agora usa `resource: "sheet"`, `operation: "read"`, com filtro por
-  `event_id` (`lookupColumn`/`lookupValue`) e `options.returnFirstMatch: true`, no mesmo padrão
-  das leituras usadas no workflow de agendamento.
-- **Atualizar Data na Planilha** (Google Sheets) — estava sem `resource` e sem `columns`
-  configurado (o que faria o node falhar em tempo de execução por falta de `matchingColumns`).
-  Agora usa `resource: "sheet"`, `columns.mappingMode: "defineBelow"` com
-  `matchingColumns: ["event_id"]` e o schema completo das 5 colunas da planilha
-  (`nome`, `telefone`, `servico`, `data`, `event_id`), igual ao node "Atualizar Linha na
-  Planilha" do workflow de agendamento. A coluna gravada também foi corrigida de `data_hora`
-  para `data`, que é o nome real da coluna na planilha "Agendamentos" (definida em
-  `agendamento.json`).
-- **Buscar Agendamentos de Amanhã**, **Cancelar Evento no Calendar** e **Atualizar Evento no
-  Calendar** (Google Calendar) — passaram a declarar `resource: "event"` explicitamente, como
-  em todos os nodes de evento do Google Calendar em `agendamento.json`.
-- **Confirmar, Cancelar ou Remarcar?** (Switch) — as saídas `confirmar`, `cancelar` e
-  `remarcar` agora têm `renameOutput`/`outputKey` definidos, seguindo a convenção do projeto de
-  nomear cada saída de Switch/If pelo caso que representa (mesmo padrão do Switch "Qual a
-  Intenção do Cliente?" em `agendamento.json`).
-- **Configurações do workflow** — adicionado `timezone: "America/Sao_Paulo"` e
-  `callerPolicy: "workflowsFromSameOwner"`, alinhando com as settings do workflow de
-  agendamento (o timezone é usado pelas expressões `$today`/`$now` deste workflow).
-- **Nodes de envio no WhatsApp** — parâmetros alinhados ao formato usado em `agendamento.json`
-  (`operation`, `phoneNumberId`, `recipientPhoneNumber`, `textBody`, `additionalFields`), sem os
-  campos redundantes `resource`/`messageType` que estavam nos nodes deste workflow.
+> **Nota:** o node "Buscar Agendamentos de Amanhã" e os nodes de evento do Google Calendar
+> (`Cancelar Evento no Calendar`, `Atualizar Evento no Calendar`) não declaram `resource: "event"`
+> explicitamente no momento — o n8n usa o resource padrão do node. Isso não é um bug funcional,
+> mas difere da convenção explícita usada em `agendamento.json`; não foi reaplicado nesta rodada
+> para não conflitar com edições feitas diretamente no editor do n8n.
 
 ## Limitação conhecida do protótipo — Wait node
 
@@ -72,15 +73,17 @@ os dois pontos em produção. O caminho recomendado:
 Isso não foi implementado neste protótipo para manter o foco na estrutura e lógica principal —
 fica como próximo passo antes de ir para produção.
 
-## Credenciais (placeholder)
+## Credenciais e recursos conectados
 
-O workflow foi criado com credenciais fictícias — é preciso conectar as reais na instância n8n
-antes de usar:
+Este workflow já está conectado a credenciais e recursos reais na instância n8n (WhatsApp
+Business, Google Calendar, Google Sheets, Anthropic Claude). Os objetos de `credentials` (IDs de
+credencial) são removidos do JSON exportado para este repo — nunca são commitados, conforme a
+convenção do projeto. Os resource locators (planilha, aba, calendário, `phoneNumberId`), por não
+serem credenciais, refletem a configuração real em uso:
 
-- `WhatsApp Business (Meta Cloud API)` — envio de mensagens.
-- `Anthropic Claude` — modelo usado pelo AI Agent de classificação.
-- `Google Calendar` — buscar, cancelar e atualizar eventos.
-- `Google Sheets` — buscar e atualizar os dados do cliente.
+- Planilha: **Clientes - Automação PMEs**, aba **Sheet1** — colunas `nome`, `telefone`,
+  `servico`, `data`, `event_id`.
+- Calendário: o calendário do Google associado à conta usada pelo negócio.
 
-Também é preciso configurar, direto na instância, o `phoneNumberId` do WhatsApp Business e
-selecionar o calendário e a planilha/aba corretos nos resource locators de cada node.
+Ao clonar/importar este JSON numa outra instância, é preciso reconectar as credenciais e, se for
+usar uma planilha/calendário diferentes, ajustar os resource locators dos nodes.

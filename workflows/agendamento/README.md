@@ -53,6 +53,12 @@ automaticamente, se houver horário livre.
        `servico` e `data`) → confirma a remarcação no WhatsApp.
      - **Não:** reaproveita o node "Sugerir Outro Horário no WhatsApp" do fluxo de agendar.
 
+   > **Bug corrigido (2026-09-22):** o node "Confirmar Remarcação no WhatsApp" tinha um texto
+   > fixo ("Prontinho! Sua remarcação ficou assim: ... Até lá! 😊") envolvendo o
+   > `confirmacao_texto` gerado pela IA — que já é uma frase completa e natural. Isso duplicava
+   > a mensagem. O campo passou a usar apenas `{{ confirmacao_texto }}`, igual ao node
+   > "Responder Dúvida no WhatsApp".
+
 ### Saída "cancelar"
 
 6. **Buscar Agendamento para Cancelar** / **Selecionar Agendamento Mais Recente (Cancelar)** /

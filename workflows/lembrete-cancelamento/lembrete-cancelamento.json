@@ -69,7 +69,44 @@
       "typeVersion": 1.1,
       "position": [1360, 80],
       "webhookId": "862f5dbb-bcce-4182-b45b-4ed4a4191fac",
-      "parameters": { "resume": "webhook", "options": {} }
+      "parameters": {
+        "resume": "webhook",
+        "options": {},
+        "limitWaitTime": true,
+        "limitType": "afterTimeInterval",
+        "resumeAmount": 24,
+        "resumeUnit": "hours"
+      }
+    },
+    {
+      "id": "ce13e7ac-d009-4bc5-be28-4594276fbb8f",
+      "name": "Cliente Respondeu ou Deu Timeout?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1470, 80],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [{ "leftValue": "={{ $json.body?.messages?.[0]?.text?.body ?? $json.messages?.[0]?.text?.body ?? \"\" }}", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }, "rightValue": "" }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "dac4c08e-9f6b-4c66-862e-73ad13dae485",
+      "name": "Avisar Timeout do Lembrete no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [1700, 300],
+      "webhookId": "038d557e-5e73-480c-8599-a45dc968cbbe",
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1367004446487242",
+        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
+        "textBody": "=Oi {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Não recebi resposta sobre o lembrete do seu horário de {{ $('Buscar Dados do Cliente na Planilha').item.json.servico }} amanhã. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊",
+        "additionalFields": {}
+      }
     },
     {
       "id": "96718f6d-a461-45a2-956b-962669d16cd2",
@@ -350,7 +387,14 @@
     "Buscar Agendamentos de Amanhã": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Buscar Dados do Cliente na Planilha": { "main": [[{ "node": "Enviar Lembrete no WhatsApp", "type": "main", "index": 0 }]] },
     "Enviar Lembrete no WhatsApp": { "main": [[{ "node": "Aguardar Resposta do Cliente", "type": "main", "index": 0 }]] },
-    "Aguardar Resposta do Cliente": { "main": [[{ "node": "Normalizar Resposta do Lembrete", "type": "main", "index": 0 }]] },
+    "Aguardar Resposta do Cliente": { "main": [[{ "node": "Cliente Respondeu ou Deu Timeout?", "type": "main", "index": 0 }]] },
+    "Cliente Respondeu ou Deu Timeout?": {
+      "main": [
+        [{ "node": "Normalizar Resposta do Lembrete", "type": "main", "index": 0 }],
+        [{ "node": "Avisar Timeout do Lembrete no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Avisar Timeout do Lembrete no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Normalizar Resposta do Lembrete": { "main": [[{ "node": "Classificar Resposta do Lembrete", "type": "main", "index": 0 }]] },
     "Classificar Resposta do Lembrete": { "main": [[{ "node": "Confirmar, Cancelar ou Remarcar?", "type": "main", "index": 0 }]] },
     "Modelo Claude para Classificação": { "ai_languageModel": [[{ "node": "Classificar Resposta do Lembrete", "type": "ai_languageModel", "index": 0 }]] },

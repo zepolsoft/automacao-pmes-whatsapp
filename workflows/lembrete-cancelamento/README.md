@@ -12,18 +12,49 @@ dele: confirmar, cancelar ou remarcar.
 3. **Processar Cada Agendamento** — loop (Split in Batches, um agendamento por vez). Para cada um:
    1. **Buscar Dados do Cliente na Planilha** — encontra a linha na planilha pelo `event_id`.
    2. **Enviar Lembrete no WhatsApp** — pergunta se confirma, cancela ou quer remarcar.
-   3. **Aguardar Resposta do Cliente** — Wait node (retomado via webhook).
-   4. **Classificar Resposta do Lembrete** — AI Agent (Claude) classifica a resposta em
-      `confirmar` / `cancelar` / `remarcar` (e, no caso de remarcação, já extrai o novo
-      dia/horário pedido).
-   5. **Confirmar, Cancelar ou Remarcar?** (Switch) — 4 caminhos:
-      - **Confirmar:** envia mensagem final de confirmação.
-      - **Cancelar:** deleta o evento no Calendar (pelo `event_id`) → confirma o cancelamento.
-      - **Remarcar:** verifica se o novo horário está livre → se sim, **atualiza** o evento
-        existente (não cria um novo) e atualiza a coluna `data` na planilha (casando pela
-        coluna `event_id`) → confirma a remarcação; se não, pede outro horário.
-      - **Não entendi (fallback):** pede para o cliente esclarecer a resposta.
-   6. Volta para o próximo agendamento do lote.
+   3. **Aguardar Resposta do Cliente** — Wait node (retomado via webhook), com limite de
+      espera de 24h (ver seção "Timeout de espera" abaixo).
+   4. **Cliente Respondeu ou Deu Timeout?** (IF) — diferencia resposta real de timeout:
+      - **Sim (respondeu):** segue para **Classificar Resposta do Lembrete** — AI Agent
+        (Claude) classifica a resposta em `confirmar` / `cancelar` / `remarcar` (e, no caso de
+        remarcação, já extrai o novo dia/horário pedido) → **Confirmar, Cancelar ou
+        Remarcar?** (Switch) — 4 caminhos:
+        - **Confirmar:** envia mensagem final de confirmação.
+        - **Cancelar:** deleta o evento no Calendar (pelo `event_id`) → confirma o cancelamento.
+        - **Remarcar:** verifica se o novo horário está livre → se sim, **atualiza** o evento
+          existente (não cria um novo) e atualiza a coluna `data` na planilha (casando pela
+          coluna `event_id`) → confirma a remarcação; se não, pede outro horário.
+        - **Não entendi (fallback):** pede para o cliente esclarecer a resposta.
+      - **Não (timeout):** **Avisar Timeout do Lembrete no WhatsApp** — avisa o cliente que não
+        houve resposta e que o agendamento foi mantido como está. Não passa pela
+        classificação/confirmação/cancelamento/remarcação.
+   5. Volta para o próximo agendamento do lote.
+
+## Timeout de espera no lembrete
+
+O node **Aguardar Resposta do Cliente** (Wait, `resume: "webhook"`) antes ficava esperando a
+resposta do cliente indefinidamente — se o cliente nunca respondesse, a execução ficava presa
+em "Waiting" para sempre.
+
+- **Limit Wait Time:** ativado (`limitWaitTime: true`), com `limitType: "afterTimeInterval"`,
+  `resumeAmount: 24`, `resumeUnit: "hours"` — a execução retoma automaticamente depois de 24h
+  mesmo sem resposta do cliente.
+- **Detecção de timeout:** o node IF **Cliente Respondeu ou Deu Timeout?**, logo depois do
+  Wait, verifica se o texto da mensagem do cliente está presente no payload:
+  `{{ $json.body?.messages?.[0]?.text?.body ?? $json.messages?.[0]?.text?.body ?? "" }}`
+  com o operador **"not empty"**. Essa é a mesma expressão já usada em "Normalizar Resposta do
+  Lembrete" para extrair o texto da resposta. Quando o Wait retoma por resposta real via
+  webhook, esse campo vem preenchido com o texto do cliente. Quando retoma por timeout, o item
+  que sai do Wait é o mesmo que entrou nele (a resposta do envio do lembrete no WhatsApp, que
+  não tem `messages[0].text`), então a expressão resulta em string vazia — condição falsa.
+- **Branch de timeout:** vai para o node **Avisar Timeout do Lembrete no WhatsApp**, que envia
+  uma mensagem simples avisando que não houve resposta e que o agendamento continua como está,
+  usando `$('Buscar Dados do Cliente na Planilha')` (nome, serviço, telefone) — essa referência
+  continua acessível mesmo após o timeout, pois esse node já rodou antes do Wait no mesmo
+  caminho de execução. Depois, o fluxo volta para **Processar Cada Agendamento** para continuar
+  o loop com o próximo agendamento do lote (igual a todos os outros caminhos terminais deste
+  workflow) — sem isso, o loop pararia e os agendamentos seguintes do dia não seriam
+  processados.
 
 ## Histórico de correções
 

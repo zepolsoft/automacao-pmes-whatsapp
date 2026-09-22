@@ -48,7 +48,7 @@
       "name": "Interpretar Intenção do Cliente",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [912, 384],
+      "position": [976, 384],
       "parameters": {
         "promptType": "define",
         "text": "=Data e hora atuais: {{ $now.toISO() }}\nMensagem do cliente: {{ $json.mensagem }}\nNome do cliente: {{ $json.nome }}",
@@ -74,7 +74,7 @@
       "name": "Parser Estruturado de Agendamento",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
-      "position": [1048, 616],
+      "position": [1176, 616],
       "parameters": {
         "jsonSchemaExample": "{ \"intencao\": \"agendar\", \"servico\": \"corte de cabelo\", \"nome_cliente\": \"João Silva\", \"data_hora_inicio\": \"2026-09-18T15:00:00\", \"data_hora_fim\": \"2026-09-18T16:00:00\", \"confirmacao_texto\": \"quinta-feira, dia 18 de setembro, às 15h\" }"
       }
@@ -84,10 +84,28 @@
       "name": "Simple Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.4,
-      "position": [1040, 736],
+      "position": [1048, 616],
       "parameters": {
         "sessionIdType": "customKey",
         "sessionKey": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}"
+      }
+    },
+    {
+      "id": "58785ad7-1d0f-4b43-927d-e952944d2844",
+      "name": "Qual a Intenção do Cliente?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [1264, 384],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            { "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.output.intencao }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "agendar" }], "combinator": "and" }, "renameOutput": true, "outputKey": "agendar" },
+            { "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.output.intencao }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "remarcar" }], "combinator": "and" }, "renameOutput": true, "outputKey": "remarcar" },
+            { "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.output.intencao }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "cancelar" }], "combinator": "and" }, "renameOutput": true, "outputKey": "cancelar" }
+          ]
+        },
+        "options": { "fallbackOutput": "extra", "renameFallbackOutput": "duvida" }
       }
     },
     {
@@ -95,7 +113,7 @@
       "name": "Tem Data Para Agendar?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [1264, 384],
+      "position": [1504, 384],
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
@@ -113,7 +131,7 @@
       "name": "Verificar Disponibilidade",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
-      "position": [1488, 288],
+      "position": [1728, 288],
       "parameters": {
         "resource": "calendar",
         "calendar": { "__rl": true, "value": "", "mode": "list", "cachedResultName": "Agenda do Negócio" },
@@ -127,7 +145,7 @@
       "name": "Horário Disponível?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [1712, 288],
+      "position": [1952, 288],
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
@@ -142,7 +160,7 @@
       "name": "Criar Evento no Calendar",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
-      "position": [1936, 192],
+      "position": [2176, 192],
       "parameters": {
         "calendar": { "__rl": true, "value": "", "mode": "list", "cachedResultName": "Agenda do Negócio" },
         "start": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
@@ -158,7 +176,7 @@
       "name": "Salvar Cliente na Planilha",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
-      "position": [2160, 192],
+      "position": [2400, 192],
       "parameters": {
         "operation": "append",
         "documentId": { "__rl": true, "value": "", "mode": "list", "cachedResultName": "Agendamentos WhatsApp" },
@@ -191,7 +209,7 @@
       "name": "Confirmar Agendamento no WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [2384, 192],
+      "position": [2624, 192],
       "parameters": {
         "operation": "send",
         "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
@@ -205,7 +223,7 @@
       "name": "Sugerir Outro Horário no WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [1936, 384],
+      "position": [2176, 384],
       "parameters": {
         "operation": "send",
         "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
@@ -219,12 +237,236 @@
       "name": "Responder Dúvida no WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [1488, 480],
+      "position": [1728, 480],
       "parameters": {
         "operation": "send",
         "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
         "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
         "textBody": "={{ $('Interpretar Intenção do Cliente').item.json.output.confirmacao_texto }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "25cd6299-0427-43f8-86c1-b2b5bd462dc9",
+      "name": "Buscar Agendamento para Remarcar",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1504, 650],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos WhatsApp" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos" },
+        "filtersUI": { "values": [{ "lookupColumn": "telefone", "lookupValue": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}" }] },
+        "options": { "returnAllMatches": "returnAllMatches" }
+      }
+    },
+    {
+      "id": "ffa2ca76-42ba-496a-baec-4cd20cf3ffb8",
+      "name": "Selecionar Agendamento Mais Recente (Remarcar)",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [1728, 650],
+      "parameters": { "maxItems": 1, "keep": "lastItems" }
+    },
+    {
+      "id": "bd1be247-3b0f-44de-a6da-62f7d340be6c",
+      "name": "Encontrou Agendamento Para Remarcar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1952, 650],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "leftValue": "={{ $json.event_id }}", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }, "rightValue": "" }],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "3ca67be9-db1e-457b-9255-4f9c9e3c8081",
+      "name": "Verificar Disponibilidade para Remarcar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [2176, 610],
+      "parameters": {
+        "resource": "calendar",
+        "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
+        "timeMin": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
+        "timeMax": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_fim }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "25baa78f-334c-4ba8-a09a-45c5001172f5",
+      "name": "Novo Horário Disponível?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [2400, 610],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [{ "leftValue": "={{ $json.available }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "de94ffef-35e3-4900-bca9-6b6c07c55203",
+      "name": "Atualizar Evento no Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [2624, 560],
+      "parameters": {
+        "resource": "event",
+        "operation": "update",
+        "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
+        "eventId": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.event_id }}",
+        "updateFields": {
+          "start": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
+          "end": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_fim }}",
+          "summary": "={{ $('Interpretar Intenção do Cliente').item.json.output.servico }} - {{ $('Interpretar Intenção do Cliente').item.json.output.nome_cliente }}"
+        }
+      }
+    },
+    {
+      "id": "21769843-d303-40f6-9022-93c98b9abdf7",
+      "name": "Atualizar Linha na Planilha",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [2848, 560],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos WhatsApp" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "servico": "={{ $('Interpretar Intenção do Cliente').item.json.output.servico }}",
+            "data": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
+            "event_id": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.event_id }}"
+          },
+          "matchingColumns": ["event_id"],
+          "schema": [
+            { "id": "nome", "displayName": "nome", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "servico", "displayName": "servico", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "data", "displayName": "data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b59c3775-d174-4e22-82a6-7102e3758686",
+      "name": "Confirmar Remarcação no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [3072, 560],
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
+        "textBody": "=Prontinho! Sua remarcação ficou assim: {{ $('Interpretar Intenção do Cliente').item.json.output.confirmacao_texto }}. Até lá! 😊",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "9ea7f467-d79c-4414-b5ff-2b8abc5183a2",
+      "name": "Avisar Sem Agendamento Ativo no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [2176, 760],
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
+        "textBody": "=Não encontrei nenhum agendamento ativo pra esse número. Quer marcar um horário novo? 🙂",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "d4af93d3-0a36-4123-9764-b7b55768ea06",
+      "name": "Buscar Agendamento para Cancelar",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1504, 900],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos WhatsApp" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos" },
+        "filtersUI": { "values": [{ "lookupColumn": "telefone", "lookupValue": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}" }] },
+        "options": { "returnAllMatches": "returnAllMatches" }
+      }
+    },
+    {
+      "id": "688dd5ac-e3ae-4d1f-9223-3a9b3d67f962",
+      "name": "Selecionar Agendamento Mais Recente (Cancelar)",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [1728, 900],
+      "parameters": { "maxItems": 1, "keep": "lastItems" }
+    },
+    {
+      "id": "9265861c-5760-42e1-9d63-b2efc0d57070",
+      "name": "Encontrou Agendamento Para Cancelar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1952, 900],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "leftValue": "={{ $json.event_id }}", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }, "rightValue": "" }],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "b63c060a-ee63-4871-ad08-511a7186d659",
+      "name": "Cancelar Evento no Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [2176, 900],
+      "parameters": {
+        "resource": "event",
+        "operation": "delete",
+        "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
+        "eventId": "={{ $('Selecionar Agendamento Mais Recente (Cancelar)').item.json.event_id }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "4c77f91a-7b2b-471f-9e3a-a17808a4d60e",
+      "name": "Remover Linha da Planilha",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [2400, 900],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "delete",
+        "documentId": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos WhatsApp" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos" },
+        "toDelete": "rows",
+        "startIndex": "={{ $('Selecionar Agendamento Mais Recente (Cancelar)').item.json.row_number }}",
+        "numberToDelete": 1
+      }
+    },
+    {
+      "id": "0f2798b3-9ee9-4709-8969-a3f87644409e",
+      "name": "Confirmar Cancelamento no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [2624, 900],
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
+        "textBody": "=Seu agendamento foi cancelado. Se quiser marcar um novo horário, é só chamar! 👋",
         "additionalFields": {}
       }
     },
@@ -251,16 +493,32 @@
       "typeVersion": 1,
       "position": [-48, 720],
       "parameters": { "content": "## 3. Salvar e responder\nSalva os dados do cliente na planilha e confirma (ou sugere outro horário) no WhatsApp.", "color": 3 }
+    },
+    {
+      "id": "27db20da-8d34-4c60-b9a9-c2a3f96d8fa3",
+      "name": "Sticky Note Remarcar Cancelar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1264, 500],
+      "parameters": { "content": "## 4. Remarcar e cancelar\nBusca o agendamento mais recente do cliente na planilha pelo telefone. Se encontrar, atualiza ou cancela o evento no Calendar e a linha correspondente na planilha. Se não encontrar, avisa no WhatsApp.", "color": 6 }
     }
   ],
   "connections": {
     "Receber Mensagem WhatsApp": { "main": [[{ "node": "Filtrar Apenas Mensagens", "type": "main", "index": 0 }]] },
     "Filtrar Apenas Mensagens": { "main": [[{ "node": "Normalizar Dados da Mensagem", "type": "main", "index": 0 }]] },
     "Normalizar Dados da Mensagem": { "main": [[{ "node": "Interpretar Intenção do Cliente", "type": "main", "index": 0 }]] },
-    "Interpretar Intenção do Cliente": { "main": [[{ "node": "Tem Data Para Agendar?", "type": "main", "index": 0 }]] },
+    "Interpretar Intenção do Cliente": { "main": [[{ "node": "Qual a Intenção do Cliente?", "type": "main", "index": 0 }]] },
     "Modelo Claude": { "ai_languageModel": [[{ "node": "Interpretar Intenção do Cliente", "type": "ai_languageModel", "index": 0 }]] },
     "Parser Estruturado de Agendamento": { "ai_outputParser": [[{ "node": "Interpretar Intenção do Cliente", "type": "ai_outputParser", "index": 0 }]] },
     "Simple Memory": { "ai_memory": [[{ "node": "Interpretar Intenção do Cliente", "type": "ai_memory", "index": 0 }]] },
+    "Qual a Intenção do Cliente?": {
+      "main": [
+        [{ "node": "Tem Data Para Agendar?", "type": "main", "index": 0 }],
+        [{ "node": "Buscar Agendamento para Remarcar", "type": "main", "index": 0 }],
+        [{ "node": "Buscar Agendamento para Cancelar", "type": "main", "index": 0 }],
+        [{ "node": "Responder Dúvida no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
     "Tem Data Para Agendar?": {
       "main": [
         [{ "node": "Verificar Disponibilidade", "type": "main", "index": 0 }],
@@ -275,7 +533,34 @@
       ]
     },
     "Criar Evento no Calendar": { "main": [[{ "node": "Salvar Cliente na Planilha", "type": "main", "index": 0 }]] },
-    "Salvar Cliente na Planilha": { "main": [[{ "node": "Confirmar Agendamento no WhatsApp", "type": "main", "index": 0 }]] }
+    "Salvar Cliente na Planilha": { "main": [[{ "node": "Confirmar Agendamento no WhatsApp", "type": "main", "index": 0 }]] },
+    "Buscar Agendamento para Remarcar": { "main": [[{ "node": "Selecionar Agendamento Mais Recente (Remarcar)", "type": "main", "index": 0 }]] },
+    "Selecionar Agendamento Mais Recente (Remarcar)": { "main": [[{ "node": "Encontrou Agendamento Para Remarcar?", "type": "main", "index": 0 }]] },
+    "Encontrou Agendamento Para Remarcar?": {
+      "main": [
+        [{ "node": "Verificar Disponibilidade para Remarcar", "type": "main", "index": 0 }],
+        [{ "node": "Avisar Sem Agendamento Ativo no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Verificar Disponibilidade para Remarcar": { "main": [[{ "node": "Novo Horário Disponível?", "type": "main", "index": 0 }]] },
+    "Novo Horário Disponível?": {
+      "main": [
+        [{ "node": "Atualizar Evento no Calendar", "type": "main", "index": 0 }],
+        [{ "node": "Sugerir Outro Horário no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Atualizar Evento no Calendar": { "main": [[{ "node": "Atualizar Linha na Planilha", "type": "main", "index": 0 }]] },
+    "Atualizar Linha na Planilha": { "main": [[{ "node": "Confirmar Remarcação no WhatsApp", "type": "main", "index": 0 }]] },
+    "Buscar Agendamento para Cancelar": { "main": [[{ "node": "Selecionar Agendamento Mais Recente (Cancelar)", "type": "main", "index": 0 }]] },
+    "Selecionar Agendamento Mais Recente (Cancelar)": { "main": [[{ "node": "Encontrou Agendamento Para Cancelar?", "type": "main", "index": 0 }]] },
+    "Encontrou Agendamento Para Cancelar?": {
+      "main": [
+        [{ "node": "Cancelar Evento no Calendar", "type": "main", "index": 0 }],
+        [{ "node": "Avisar Sem Agendamento Ativo no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Cancelar Evento no Calendar": { "main": [[{ "node": "Remover Linha da Planilha", "type": "main", "index": 0 }]] },
+    "Remover Linha da Planilha": { "main": [[{ "node": "Confirmar Cancelamento no WhatsApp", "type": "main", "index": 0 }]] }
   },
   "settings": {
     "executionOrder": "v1",

@@ -8,18 +8,22 @@ automaticamente, se houver horário livre.
 ## Fluxo
 
 1. **Receber Mensagem WhatsApp** — trigger do WhatsApp Business Cloud (Meta Cloud API).
-2. **Normalizar Dados da Mensagem** — extrai telefone, nome e texto da mensagem do payload do webhook.
-3. **Interpretar Intenção do Cliente** — AI Agent (Claude) que lê a mensagem e extrai intenção,
+2. **Filtrar Apenas Mensagens** — o webhook também recebe eventos de status (confirmação de
+   leitura/entrega, payload com `statuses` e sem `messages`). Esse IF passa adiante só quando
+   existe `messages[0]` de fato; eventos de status caem no branch "false" e o fluxo encerra ali,
+   sem erro.
+3. **Normalizar Dados da Mensagem** — extrai telefone, nome e texto da mensagem do payload do webhook.
+4. **Interpretar Intenção do Cliente** — AI Agent (Claude) que lê a mensagem e extrai intenção,
    serviço, data/horário (convertendo datas relativas como "amanhã" para data absoluta) e um
    texto da data por extenso em português, pronto para a resposta ao cliente.
-4. **Tem Data Para Agendar?**
+5. **Tem Data Para Agendar?**
    - **Sim:** intenção é "agendar" e a IA extraiu `data_hora_inicio` → segue para verificar
      disponibilidade.
    - **Não:** dúvida, cancelamento, remarcação, ou "agendar" sem data extraída → responde no
      WhatsApp com o `confirmacao_texto` da IA (pedindo esclarecimento, por exemplo), sem tentar
      consultar o Calendar com uma data vazia.
-5. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
-6. **Horário Disponível?**
+6. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
+7. **Horário Disponível?**
    - **Sim:** Cria o evento no Calendar → salva nome, telefone, serviço, data e `event_id` na
      planilha do Google Sheets → confirma o agendamento no WhatsApp.
    - **Não:** responde no WhatsApp pedindo outro dia/horário.

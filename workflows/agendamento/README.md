@@ -13,32 +13,39 @@ automaticamente, se houver horário livre.
    existe `messages[0]` de fato; eventos de status caem no branch "false" e o fluxo encerra ali,
    sem erro.
 3. **Normalizar Dados da Mensagem** — extrai telefone, nome e texto da mensagem do payload do webhook.
-4. **Interpretar Intenção do Cliente** — AI Agent (Claude) que lê a mensagem e extrai intenção,
+4. **Buscar Serviços e Preços** — Google Sheets, lê todas as linhas da planilha **"Serviços -
+   Barbearia"** (aba "Serviços"), com as colunas `servico`, `preco`, `duracao_minutos`.
+5. **Formatar Lista de Serviços** — Code node, transforma as linhas em uma lista de texto (uma
+   por linha, `- <serviço>: R$ <preco> (<duracao_minutos> min)`) num único campo
+   `lista_servicos`, pronta para entrar no prompt da IA.
+6. **Interpretar Intenção do Cliente** — AI Agent (Claude) que lê a mensagem e extrai intenção,
    serviço, data/horário (convertendo datas relativas como "amanhã" para data absoluta) e um
    texto da data por extenso em português, pronto para a resposta ao cliente. Usa o node
    **Simple Memory** (buffer de janela, com sessão por telefone do cliente) para manter o
    histórico da conversa, e o prompt já cobre diferenciar "agendar" de "remarcar", evitar
    respostas em formato de template e ignorar tentativas de instrução fora do escopo da
-   barbearia.
-5. **Qual a Intenção do Cliente?** — Switch com base em `intencao`, com 4 saídas:
+   barbearia. O prompt recebe a `lista_servicos` formatada na seção "SERVIÇOS DISPONÍVEIS E
+   PREÇOS" e usa a duração real de cada serviço (em vez de uma duração fixa) para calcular
+   `data_hora_fim` — ver detalhes na seção "Planilha de serviços e preços" abaixo.
+7. **Qual a Intenção do Cliente?** — Switch com base em `intencao`, com 4 saídas:
    `agendar`, `remarcar`, `cancelar` e o fallback `duvida` (qualquer outro valor, incluindo
    uma resposta inesperada da IA, cai nesse fallback e é tratado como dúvida).
 
 ### Saída "agendar"
 
-6. **Tem Data Para Agendar?**
+8. **Tem Data Para Agendar?**
    - **Sim:** a IA extraiu `data_hora_inicio` → segue para verificar disponibilidade.
    - **Não:** "agendar" sem data extraída → responde no WhatsApp com o `confirmacao_texto`
      da IA pedindo esclarecimento, sem tentar consultar o Calendar com uma data vazia.
-7. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
-8. **Horário Disponível?**
+9. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
+10. **Horário Disponível?**
    - **Sim:** Cria o evento no Calendar → salva nome, telefone, serviço, data e `event_id` na
      planilha do Google Sheets → confirma o agendamento no WhatsApp.
    - **Não:** responde no WhatsApp pedindo outro dia/horário.
 
 ### Saída "remarcar"
 
-6. **Buscar Agendamento para Remarcar** — Google Sheets (`read`, com filtro por `telefone`,
+8. **Buscar Agendamento para Remarcar** — Google Sheets (`read`, com filtro por `telefone`,
    retornando todas as linhas que baterem) → **Selecionar Agendamento Mais Recente (Remarcar)**
    (node Limit, mantém só a última linha, assumindo que a planilha é preenchida em ordem
    cronológica) → **Encontrou Agendamento Para Remarcar?** (IF checando se `event_id` veio
@@ -61,7 +68,7 @@ automaticamente, se houver horário livre.
 
 ### Saída "cancelar"
 
-6. **Buscar Agendamento para Cancelar** / **Selecionar Agendamento Mais Recente (Cancelar)** /
+8. **Buscar Agendamento para Cancelar** / **Selecionar Agendamento Mais Recente (Cancelar)** /
    **Encontrou Agendamento Para Cancelar?** — mesma lógica de busca do fluxo de remarcar.
    - **Não encontrou:** reaproveita o node que avisa que não há agendamento ativo.
    - **Encontrou:** **Cancelar Evento no Calendar** (`delete`, usando o `event_id`) →
@@ -70,8 +77,33 @@ automaticamente, se houver horário livre.
 
 ### Saída "duvida" (fallback)
 
-6. **Responder Dúvida no WhatsApp** — mesmo node reaproveitado pelo "Tem Data Para Agendar?"
-   (agendar sem data): responde com o `confirmacao_texto` gerado pela IA.
+8. **Responder Dúvida no WhatsApp** — mesmo node reaproveitado pelo "Tem Data Para Agendar?"
+   (agendar sem data): responde com o `confirmacao_texto` gerado pela IA. Também é usado quando
+   o cliente pergunta sobre serviços/preços — a IA responde com base na `lista_servicos`.
+
+## Planilha de serviços e preços
+
+Nova planilha: **[Serviços - Barbearia](https://docs.google.com/spreadsheets/d/1fOA2tNHYHJPMlk4SKZfBJlm5E0BXWiDppYPfSiPI0sc/edit)**
+(aba "Serviços"), colunas `servico` | `preco` | `duracao_minutos`. Criada com 4 linhas de
+exemplo (valores fictícios, para editar com os preços/durações reais):
+
+| servico | preco | duracao_minutos |
+|---|---|---|
+| Corte | 40 | 35 |
+| Barba | 30 | 25 |
+| Corte e barba | 65 | 55 |
+| Sobrancelha | 15 | 10 |
+
+O fluxo lê essa planilha a cada mensagem recebida (node **Buscar Serviços e Preços**), formata
+as linhas num texto único (node **Formatar Lista de Serviços**, ex.:
+`- Corte: R$ 40 (35 min)`) e injeta esse texto na seção **"SERVIÇOS DISPONÍVEIS E PREÇOS"** do
+prompt de **Interpretar Intenção do Cliente**. A partir disso, o prompt foi ajustado para:
+
+- Calcular `data_hora_fim` usando a **duração real do serviço identificado** (lookup na lista),
+  somando durações quando o cliente combina dois serviços (ex.: "corte e barba") — caindo para
+  1 hora padrão apenas se o serviço não estiver listado.
+- Responder perguntas de `duvida` sobre serviços/preços com base na lista, sem inventar valores
+  que não estejam nela.
 
 ## Credenciais (placeholder)
 
@@ -81,7 +113,8 @@ antes de usar:
 - `WhatsApp Business (Meta Cloud API)` — trigger e envio de mensagens.
 - `Anthropic Claude` — modelo usado pelo AI Agent.
 - `Google Calendar` — verificar disponibilidade, criar, atualizar e cancelar evento.
-- `Google Sheets` — salvar, buscar, atualizar e remover a linha do cliente agendado.
+- `Google Sheets` — salvar, buscar, atualizar e remover a linha do cliente agendado; também ler
+  a planilha "Serviços - Barbearia" (serviços, preços e durações).
 
 Também é preciso configurar, direto na instância:
 - O `phoneNumberId` do WhatsApp Business (está com um placeholder nos nodes de envio).

@@ -64,11 +64,28 @@
       }
     },
     {
+      "id": "6d02a817-a51f-4875-a3ae-1049dc8e0a5d",
+      "name": "Tem Data Para Agendar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1000, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.output.intencao }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "agendar" },
+            { "leftValue": "={{ $json.output.data_hora_inicio }}", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }, "rightValue": "" }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
       "id": "82c93033-312e-4671-839c-1ea3d7ce0fe8",
       "name": "Verificar Disponibilidade",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
-      "position": [1080, 300],
+      "position": [1300, 300],
       "parameters": {
         "resource": "calendar",
         "operation": "availability",
@@ -82,7 +99,7 @@
       "name": "Horário Disponível?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [1300, 300],
+      "position": [1520, 300],
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
@@ -96,7 +113,7 @@
       "name": "Criar Evento no Calendar",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
-      "position": [1560, 180],
+      "position": [1780, 180],
       "parameters": {
         "resource": "event",
         "operation": "create",
@@ -115,7 +132,7 @@
       "name": "Salvar Cliente na Planilha",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
-      "position": [1780, 180],
+      "position": [2000, 180],
       "parameters": {
         "resource": "sheet",
         "operation": "append",
@@ -145,7 +162,7 @@
       "name": "Confirmar Agendamento no WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [2000, 180],
+      "position": [2220, 180],
       "parameters": {
         "resource": "message",
         "operation": "send",
@@ -160,7 +177,7 @@
       "name": "Sugerir Outro Horário no WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [1560, 420],
+      "position": [1780, 420],
       "parameters": {
         "resource": "message",
         "operation": "send",
@@ -168,6 +185,21 @@
         "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
         "messageType": "text",
         "textBody": "Esse horário já está ocupado. Pode me dizer outro dia ou horário que funcione para você que eu já verifico a disponibilidade? 🙂"
+      }
+    },
+    {
+      "id": "2705c760-d110-4511-b645-18b278771771",
+      "name": "Responder Dúvida no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [1000, 540],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
+        "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
+        "messageType": "text",
+        "textBody": "={{ $('Interpretar Intenção do Cliente').item.json.output.confirmacao_texto }}"
       }
     },
     {
@@ -198,9 +230,15 @@
   "connections": {
     "Receber Mensagem WhatsApp": { "main": [[{ "node": "Normalizar Dados da Mensagem", "type": "main", "index": 0 }]] },
     "Normalizar Dados da Mensagem": { "main": [[{ "node": "Interpretar Intenção do Cliente", "type": "main", "index": 0 }]] },
-    "Interpretar Intenção do Cliente": { "main": [[{ "node": "Verificar Disponibilidade", "type": "main", "index": 0 }]] },
+    "Interpretar Intenção do Cliente": { "main": [[{ "node": "Tem Data Para Agendar?", "type": "main", "index": 0 }]] },
     "Modelo Claude": { "ai_languageModel": [[{ "node": "Interpretar Intenção do Cliente", "type": "ai_languageModel", "index": 0 }]] },
     "Parser Estruturado de Agendamento": { "ai_outputParser": [[{ "node": "Interpretar Intenção do Cliente", "type": "ai_outputParser", "index": 0 }]] },
+    "Tem Data Para Agendar?": {
+      "main": [
+        [{ "node": "Verificar Disponibilidade", "type": "main", "index": 0 }],
+        [{ "node": "Responder Dúvida no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
     "Verificar Disponibilidade": { "main": [[{ "node": "Horário Disponível?", "type": "main", "index": 0 }]] },
     "Horário Disponível?": {
       "main": [

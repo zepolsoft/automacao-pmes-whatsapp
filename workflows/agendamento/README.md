@@ -12,8 +12,14 @@ automaticamente, se houver horário livre.
 3. **Interpretar Intenção do Cliente** — AI Agent (Claude) que lê a mensagem e extrai intenção,
    serviço, data/horário (convertendo datas relativas como "amanhã" para data absoluta) e um
    texto da data por extenso em português, pronto para a resposta ao cliente.
-4. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
-5. **Horário Disponível?**
+4. **Tem Data Para Agendar?**
+   - **Sim:** intenção é "agendar" e a IA extraiu `data_hora_inicio` → segue para verificar
+     disponibilidade.
+   - **Não:** dúvida, cancelamento, remarcação, ou "agendar" sem data extraída → responde no
+     WhatsApp com o `confirmacao_texto` da IA (pedindo esclarecimento, por exemplo), sem tentar
+     consultar o Calendar com uma data vazia.
+5. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
+6. **Horário Disponível?**
    - **Sim:** Cria o evento no Calendar → salva nome, telefone, serviço, data e `event_id` na
      planilha do Google Sheets → confirma o agendamento no WhatsApp.
    - **Não:** responde no WhatsApp pedindo outro dia/horário.

@@ -20,10 +20,41 @@ dele: confirmar, cancelar ou remarcar.
       - **Confirmar:** envia mensagem final de confirmação.
       - **Cancelar:** deleta o evento no Calendar (pelo `event_id`) → confirma o cancelamento.
       - **Remarcar:** verifica se o novo horário está livre → se sim, **atualiza** o evento
-        existente (não cria um novo) e atualiza a data na planilha → confirma a remarcação;
-        se não, pede outro horário.
+        existente (não cria um novo) e atualiza a coluna `data` na planilha (casando pela
+        coluna `event_id`) → confirma a remarcação; se não, pede outro horário.
       - **Não entendi (fallback):** pede para o cliente esclarecer a resposta.
    6. Volta para o próximo agendamento do lote.
+
+## Ajustes de configuração alinhados com `agendamento.json`
+
+Este workflow foi revisado e alinhado às convenções de configuração de node usadas em
+`workflows/agendamento/agendamento.json`:
+
+- **Buscar Dados do Cliente na Planilha** (Google Sheets) — estava sem `resource`/`operation`
+  definidos e sem filtro; agora usa `resource: "sheet"`, `operation: "read"`, com filtro por
+  `event_id` (`lookupColumn`/`lookupValue`) e `options.returnFirstMatch: true`, no mesmo padrão
+  das leituras usadas no workflow de agendamento.
+- **Atualizar Data na Planilha** (Google Sheets) — estava sem `resource` e sem `columns`
+  configurado (o que faria o node falhar em tempo de execução por falta de `matchingColumns`).
+  Agora usa `resource: "sheet"`, `columns.mappingMode: "defineBelow"` com
+  `matchingColumns: ["event_id"]` e o schema completo das 5 colunas da planilha
+  (`nome`, `telefone`, `servico`, `data`, `event_id`), igual ao node "Atualizar Linha na
+  Planilha" do workflow de agendamento. A coluna gravada também foi corrigida de `data_hora`
+  para `data`, que é o nome real da coluna na planilha "Agendamentos" (definida em
+  `agendamento.json`).
+- **Buscar Agendamentos de Amanhã**, **Cancelar Evento no Calendar** e **Atualizar Evento no
+  Calendar** (Google Calendar) — passaram a declarar `resource: "event"` explicitamente, como
+  em todos os nodes de evento do Google Calendar em `agendamento.json`.
+- **Confirmar, Cancelar ou Remarcar?** (Switch) — as saídas `confirmar`, `cancelar` e
+  `remarcar` agora têm `renameOutput`/`outputKey` definidos, seguindo a convenção do projeto de
+  nomear cada saída de Switch/If pelo caso que representa (mesmo padrão do Switch "Qual a
+  Intenção do Cliente?" em `agendamento.json`).
+- **Configurações do workflow** — adicionado `timezone: "America/Sao_Paulo"` e
+  `callerPolicy: "workflowsFromSameOwner"`, alinhando com as settings do workflow de
+  agendamento (o timezone é usado pelas expressões `$today`/`$now` deste workflow).
+- **Nodes de envio no WhatsApp** — parâmetros alinhados ao formato usado em `agendamento.json`
+  (`operation`, `phoneNumberId`, `recipientPhoneNumber`, `textBody`, `additionalFields`), sem os
+  campos redundantes `resource`/`messageType` que estavam nos nodes deste workflow.
 
 ## Limitação conhecida do protótipo — Wait node
 

@@ -31,7 +31,9 @@ automaticamente, se houver horário livre.
    funcionamento (09h–18h, seg-sáb) — ver "Horário de funcionamento" abaixo, e a nunca
    classificar como `"duvida"` uma mensagem que pede um horário específico, nem gerar
    linguagem de confirmação fora dos casos `"agendar"`/`"remarcar"` — ver "Nunca confirmar
-   sem checar disponibilidade" abaixo.
+   sem checar disponibilidade" abaixo. Reações curtas do cliente (emoji isolado, "ok", "blz",
+   "obrigado") também são tratadas com uma resposta natural de agradecimento, nunca com a
+   frase genérica de "não entendi" — ver o bug corrigido logo abaixo.
 7. **Corrigir Falsa Confirmação em Dúvida** (Code) — rede de segurança estrutural, independente
    do prompt: roda entre "Interpretar Intenção do Cliente" e o Switch de intenção (ver "Nunca
    confirmar sem checar disponibilidade" abaixo).
@@ -56,6 +58,19 @@ automaticamente, se houver horário livre.
    > funcionamento (item 4) também foi ajustada: antes ela forçava `intencao = "agendar"`
    > sempre que o horário pedido caía fora do expediente, o que podia sobrescrever um
    > `"remarcar"` legítimo; agora ela preserva a intencao já determinada pela regra crítica.
+
+   > **Bug corrigido (2026-09-24):** cliente reagindo com só um emoji (👍, 🙏, ❤️) ou um
+   > agradecimento curto ("ok", "blz", "obrigado") — normalmente uma reação a algo já
+   > combinado, não um pedido novo — recebia de volta "Não entendi bem sua mensagem. Você
+   > gostaria de marcar um horário ou tirar alguma dúvida sobre nossos serviços?", soando
+   > robótico. A causa provável: a regra de "fora de escopo" em REGRAS GERAIS (que sugere
+   > exatamente essa frase de convite) estava sendo aplicada a reações curtas, por não terem
+   > relação direta com agendamento. Nova regra na seção 5 (Regras por cenário): mensagens
+   > desse tipo continuam `intencao = "duvida"`, mas geram uma resposta curta e natural de
+   > agradecimento/confirmação (ex.: "Por nada! Até lá 😊"), nunca a frase de "não entendi" nem
+   > a pergunta genérica — essa fica reservada só para mensagens realmente ambíguas ou fora de
+   > contexto. A regra de "fora de escopo" ganhou uma nota explícita deixando claro que reações
+   > curtas não contam como fora de escopo.
 8. **Qual a Intenção do Cliente?** — Switch com base em `intencao`, com 4 saídas:
    `agendar`, `remarcar`, `cancelar` e o fallback `duvida` (qualquer outro valor, incluindo
    uma resposta inesperada da IA, cai nesse fallback e é tratado como dúvida).

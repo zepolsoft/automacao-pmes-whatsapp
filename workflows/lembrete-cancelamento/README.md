@@ -10,7 +10,9 @@ dele: confirmar, cancelar ou remarcar.
 1. **Disparar Lembrete Diário às 8h** — Schedule Trigger.
 2. **Buscar Agendamentos de Hoje (Planilha)** — Google Sheets, lê todas as linhas da planilha
    **"Clientes - Automação PMEs"** (aba "Sheet1") → **Filtrar Data de Hoje** (Filter) mantém só
-   as linhas cuja coluna `data` cai no dia de hoje (ver "Fonte de dados do lembrete" abaixo).
+   as linhas cuja coluna `data` cai no dia de hoje **e** cujo `status` é `"agendado"` ou
+   `"remarcado"` (ver "Fonte de dados do lembrete" e "Colunas de status e preço" abaixo) —
+   linhas `cancelado`, `concluido` ou `no_show` nunca geram lembrete.
 3. **Processar Cada Agendamento** — loop (Split in Batches, um agendamento por vez). Para cada um:
    1. **Enviar Lembrete no WhatsApp** — avisa o horário do agendamento (formatado a partir da
       coluna `data`, ver "Histórico de correções" abaixo) e pergunta se confirma, cancela ou
@@ -27,21 +29,32 @@ dele: confirmar, cancelar ou remarcar.
         correções" abaixo) → **Confirmar, Cancelar ou
         Remarcar?** (Switch) — 4 caminhos:
         - **Confirmar:** envia mensagem final de confirmação.
-        - **Cancelar:** deleta o evento no Calendar (pelo `event_id`) → confirma o cancelamento.
+        - **Cancelar:** deleta o evento no Calendar (pelo `event_id`) → **Atualizar Status na
+          Planilha (Cancelar)** grava `status: "cancelado"` e `atualizado_em` na linha (não
+          apaga a linha) → confirma o cancelamento.
         - **Remarcar:** **Validar Horário de Funcionamento** (Code) → **Horário Dentro do
           Expediente?** (IF) — mesma validação determinística (09h-18h, seg-sáb) do workflow
           "Agendamento via WhatsApp", ver "Horário de funcionamento na remarcação" abaixo.
           - **Fora do expediente:** avisa o cliente e pede outro horário, sem consultar o
             Calendar nem tocar na planilha.
           - **Dentro do expediente:** verifica se o novo horário está livre → se sim,
-            **atualiza** o evento existente (não cria um novo) e atualiza a coluna `data` na
-            planilha (casando pela coluna `event_id`) → confirma a remarcação; se não, pede
-            outro horário.
+            **atualiza** o evento existente (não cria um novo) e atualiza a coluna `data`,
+            `status: "remarcado"` e `atualizado_em` na planilha (casando pela coluna
+            `event_id`) → confirma a remarcação; se não, pede outro horário.
         - **Não entendi (fallback):** pede para o cliente esclarecer a resposta.
       - **Não (timeout):** **Avisar Timeout do Lembrete no WhatsApp** — avisa o cliente que não
         houve resposta e que o agendamento foi mantido como está. Não passa pela
         classificação/confirmação/cancelamento/remarcação.
    4. Volta para o próximo agendamento do lote.
+
+Além do lembrete diário, este workflow tem um **segundo trigger independente**, sem nenhuma
+relação com o fluxo acima (não compartilha nodes, só a mesma credencial/planilha):
+
+5. **Marcar Atendimentos Concluídos às 22h** — Schedule Trigger, `America/Sao_Paulo` → **Buscar
+   Todos os Agendamentos** (Google Sheets, lê a planilha inteira, sem filtro) → **Filtrar
+   Agendamentos Passados Pendentes** (Filter: `data` já passou **e** `status` é `"agendado"` ou
+   `"remarcado"`) → **Marcar Como Concluído** (Google Sheets `update`, casando por `event_id`,
+   grava `status: "concluido"` e `atualizado_em`) — ver "Colunas de status e preço" abaixo.
 
 ## Timeout de espera no lembrete
 
@@ -123,8 +136,39 @@ mudança, o ramo de remarcação só checava disponibilidade no Calendar — um 
 (e a IA aceitar) um horário fora do expediente, e o evento seria atualizado normalmente desde
 que a Calendar API confirmasse "livre" naquele horário.
 
+## Colunas de status e preço
+
+A planilha **"Clientes - Automação PMEs"** tem 4 colunas além das 5 originais (`nome`,
+`telefone`, `servico`, `data`, `event_id`): `status`, `preco`, `criado_em`, `atualizado_em` —
+detalhes de quando cada uma é escrita e por quê em `workflows/agendamento/README.md`, seção
+"Colunas de status e preço na planilha" (é lá que `status: "agendado"` e `preco` são gravados
+pela primeira vez, na criação do agendamento). Este workflow só **lê** `status`/`data` (no
+filtro do lembrete diário) e **escreve** `status`/`atualizado_em` em três pontos:
+
+- Remarcar (via resposta ao lembrete): `status: "remarcado"`.
+- Cancelar (via resposta ao lembrete): `status: "cancelado"` — a linha não é mais apagada.
+- Rotina das 22h: `status: "concluido"` para qualquer linha com `data` já passada e `status`
+  ainda `"agendado"`/`"remarcado"` — assume que o atendimento aconteceu, a menos que já tenha
+  sido marcado manualmente como `"cancelado"` ou `"no_show"` antes disso. `"no_show"` só é
+  preenchido manualmente, direto na planilha; nenhum node grava esse valor automaticamente.
+
 ## Histórico de correções
 
+- **2026-09-24 — Ciclo de vida do agendamento (status na planilha):** a planilha ganhou as
+  colunas `status`, `preco`, `criado_em`, `atualizado_em` (ver "Colunas de status e preço"
+  acima). Três mudanças neste workflow:
+  1. **"Filtrar Data de Hoje"** ganhou uma segunda condição: só considera linhas com `status`
+     `"agendado"` ou `"remarcado"`, para o lembrete diário nunca disparar para um agendamento já
+     cancelado ou concluído.
+  2. **Cancelamento via resposta ao lembrete** ganhou um node novo, **"Atualizar Status na
+     Planilha (Cancelar)"**, entre "Cancelar Evento no Calendar" e a confirmação — esse ramo
+     não tocava a planilha antes (só deletava o evento do Calendar), o que deixava a linha
+     "presa" em `status: "agendado"` para sempre.
+  3. Nova rotina independente, **"Marcar Atendimentos Concluídos às 22h"**, que marca como
+     `"concluido"` qualquer linha com `data` já passada e `status` ainda pendente.
+  - As 6 linhas que já existiam na planilha antes dessa mudança foram preenchidas uma única vez
+    com `status: "agendado"` (workflow utilitário temporário, executado e arquivado depois),
+    para não ficarem invisíveis para o filtro novo do lembrete diário.
 - **2026-09-24 — Faltava validação de horário de funcionamento na remarcação:** o ramo de
   remarcação (cliente responde ao lembrete pedindo outro horário) só checava disponibilidade
   no Google Calendar antes de atualizar o evento — não existia nenhuma checagem de horário de

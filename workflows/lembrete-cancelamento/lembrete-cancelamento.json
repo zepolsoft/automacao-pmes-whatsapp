@@ -34,7 +34,8 @@
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
           "combinator": "and",
           "conditions": [
-            { "leftValue": "={{ DateTime.fromISO($json.data).setZone('America/Sao_Paulo').toFormat('yyyy-MM-dd') }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "={{ $today.toFormat('yyyy-MM-dd') }}" }
+            { "leftValue": "={{ DateTime.fromISO($json.data).setZone('America/Sao_Paulo').toFormat('yyyy-MM-dd') }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "={{ $today.toFormat('yyyy-MM-dd') }}" },
+            { "leftValue": "={{ $json.status === 'agendado' || $json.status === 'remarcado' }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }
           ]
         },
         "options": {}
@@ -255,6 +256,43 @@
       }
     },
     {
+      "id": "f4a5b6c7-2d3e-4f5a-8b6c-9d0e1f2a3b4c",
+      "name": "Atualizar Status na Planilha (Cancelar)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [2944, 176],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "list", "value": "1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U", "cachedResultName": "Clientes - Automação PMEs", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit?usp=drivesdk" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "gid=0", "cachedResultName": "Sheet1", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit#gid=0" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_id": "={{ $('Processar Cada Agendamento').item.json.event_id }}",
+            "status": "cancelado",
+            "atualizado_em": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": ["event_id"],
+          "schema": [
+            { "id": "nome", "displayName": "nome", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "servico", "displayName": "servico", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "data", "displayName": "data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "preco", "displayName": "preco", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "criado_em", "displayName": "criado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "atualizado_em", "displayName": "atualizado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
       "id": "1e2b6d34-f089-4fa9-86bb-7f71f965c1db",
       "name": "Enviar Confirmação de Cancelamento no WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
@@ -378,7 +416,9 @@
           "mappingMode": "defineBelow",
           "value": {
             "event_id": "={{ $('Processar Cada Agendamento').item.json.event_id }}",
-            "data": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}"
+            "data": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}",
+            "status": "remarcado",
+            "atualizado_em": "={{ $now.toISO() }}"
           },
           "matchingColumns": ["event_id"],
           "schema": [
@@ -386,7 +426,11 @@
             { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "servico", "displayName": "servico", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "data", "displayName": "data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "preco", "displayName": "preco", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "criado_em", "displayName": "criado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "atualizado_em", "displayName": "atualizado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
           ]
         },
         "options": {}
@@ -471,6 +515,83 @@
       "typeVersion": 1,
       "position": [-48, 688],
       "parameters": { "content": "## 4. Executar a decisão\nConfirma, cancela o evento, ou busca novo horário e atualiza o evento (Update) e a planilha.", "color": 7 }
+    },
+    {
+      "id": "a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "Marcar Atendimentos Concluídos às 22h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [240, 1408],
+      "parameters": { "rule": { "interval": [{ "triggerAtHour": 22 }] } }
+    },
+    {
+      "id": "b2c3d4e5-6f7a-4b8c-9d0e-1f2a3b4c5d6e",
+      "name": "Buscar Todos os Agendamentos",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [464, 1408],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U", "cachedResultName": "Clientes - Automação PMEs", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit?usp=drivesdk" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "gid=0", "cachedResultName": "Sheet1", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit#gid=0" },
+        "options": {}
+      }
+    },
+    {
+      "id": "c3d4e5f6-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+      "name": "Filtrar Agendamentos Passados Pendentes",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [688, 1408],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            { "leftValue": "={{ $json.data }}", "operator": { "type": "dateTime", "operation": "before" }, "rightValue": "={{ $now.toISO() }}" },
+            { "leftValue": "={{ $json.status === 'agendado' || $json.status === 'remarcado' }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f7a",
+      "name": "Marcar Como Concluído",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [912, 1408],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "list", "value": "1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U", "cachedResultName": "Clientes - Automação PMEs", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit?usp=drivesdk" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "gid=0", "cachedResultName": "Sheet1", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit#gid=0" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_id": "={{ $json.event_id }}",
+            "status": "concluido",
+            "atualizado_em": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": ["event_id"],
+          "schema": [
+            { "id": "nome", "displayName": "nome", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "servico", "displayName": "servico", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "data", "displayName": "data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "preco", "displayName": "preco", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "criado_em", "displayName": "criado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "atualizado_em", "displayName": "atualizado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -508,7 +629,8 @@
     },
     "Enviar Confirmação Final no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Processar Cada Agendamento": { "main": [[], [{ "node": "Enviar Lembrete no WhatsApp", "type": "main", "index": 0 }]] },
-    "Cancelar Evento no Calendar": { "main": [[{ "node": "Enviar Confirmação de Cancelamento no WhatsApp", "type": "main", "index": 0 }]] },
+    "Cancelar Evento no Calendar": { "main": [[{ "node": "Atualizar Status na Planilha (Cancelar)", "type": "main", "index": 0 }]] },
+    "Atualizar Status na Planilha (Cancelar)": { "main": [[{ "node": "Enviar Confirmação de Cancelamento no WhatsApp", "type": "main", "index": 0 }]] },
     "Enviar Confirmação de Cancelamento no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Validar Horário de Funcionamento": { "main": [[{ "node": "Horário Dentro do Expediente?", "type": "main", "index": 0 }]] },
     "Horário Dentro do Expediente?": {
@@ -529,7 +651,10 @@
     "Atualizar Data na Planilha": { "main": [[{ "node": "Enviar Confirmação de Remarcação no WhatsApp", "type": "main", "index": 0 }]] },
     "Enviar Confirmação de Remarcação no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Pedir Outro Horário no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
-    "Pedir Esclarecimento no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] }
+    "Pedir Esclarecimento no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Marcar Atendimentos Concluídos às 22h": { "main": [[{ "node": "Buscar Todos os Agendamentos", "type": "main", "index": 0 }]] },
+    "Buscar Todos os Agendamentos": { "main": [[{ "node": "Filtrar Agendamentos Passados Pendentes", "type": "main", "index": 0 }]] },
+    "Filtrar Agendamentos Passados Pendentes": { "main": [[{ "node": "Marcar Como Concluído", "type": "main", "index": 0 }]] }
   },
   "settings": {
     "executionOrder": "v1",

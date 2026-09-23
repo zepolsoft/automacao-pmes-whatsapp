@@ -92,8 +92,9 @@ automaticamente, se houver horário livre.
    (node Limit, mantém só a última linha, assumindo que a planilha é preenchida em ordem
    cronológica) → **Encontrou Agendamento Para Remarcar?** (IF checando se `event_id` veio
    preenchido).
-   - **Não encontrou:** avisa no WhatsApp que não há agendamento ativo para esse número e
-     pergunta se o cliente quer marcar um novo horário.
+   - **Não encontrou:** **Redirecionar para Fluxo de Agendar** (Code) → **Tem Data Para
+     Agendar?**, reentrando no mesmo caminho do branch "agendar" (ver "Remarcar sem
+     agendamento existente" abaixo) — não envia mais aviso de "não encontrei" nem para o fluxo.
    - **Encontrou:** **Validar Horário de Funcionamento (Remarcar)** (Code) → **Horário Dentro
      do Expediente? (Remarcar)** (IF) — mesma validação determinística do fluxo de agendar,
      aplicada ao novo `data_hora_inicio`/`data_hora_fim` da IA (ver "Horário de funcionamento"
@@ -152,6 +153,39 @@ fora desse horário em duas camadas independentes:
    Disponibilidade para Remarcar" nem cria/atualiza evento ou linha na planilha — vai direto
    para **Avisar Horário Fora do Expediente no WhatsApp** (node compartilhado pelos dois
    fluxos), mesmo que a IA tenha gerado um horário inválido por algum motivo.
+
+## Remarcar sem agendamento existente
+
+> **Bug corrigido (2026-09-23, recorrente):** mesmo depois de reforçar duas vezes a regra de
+> diferenciação "agendar" vs "remarcar" no prompt, a IA continuava, em alguns casos, classificando
+> como `intencao = "remarcar"` uma proposta de horário sem nenhum agendamento confirmado antes
+> (tipicamente depois de uma ou duas rejeições por horário ocupado/fora do expediente). Como não
+> havia agendamento nenhum pra remarcar, "Encontrou Agendamento Para Remarcar?" caía no "não
+> encontrado" e o fluxo mandava "Não encontrei nenhum agendamento ativo pra esse número. Quer
+> marcar um horário novo?" e parava — só que a resposta do cliente a essa pergunta (repetir o
+> mesmo horário) também era classificada como `"remarcar"`, travando o cliente num loop sem
+> nunca conseguir marcar.
+>
+> Em vez de depender do prompt acertar (o que já tinha falhado duas vezes), a correção é
+> **estrutural**: a saída "não encontrado" de **"Encontrou Agendamento Para Remarcar?"** foi
+> reconectada do node "Avisar Sem Agendamento Ativo no WhatsApp" (que agora só é usado pelo
+> branch "cancelar") para o novo node **"Redirecionar para Fluxo de Agendar"** (Code), que
+> reconstrói o item no formato `{ output: { ...dados já extraídos pela IA nesta execução,
+> intencao: "agendar" } }` — reaproveitando `servico`, `nome_cliente`, `data_hora_inicio`,
+> `data_hora_fim` e `confirmacao_texto` que a IA já tinha extraído, só forçando `intencao` para
+> `"agendar"`. Esse item é conectado direto em **"Tem Data Para Agendar?"** — a mesma entrada
+> usada pelo branch "agendar" normal — e a partir daí segue o caminho de agendar sem nenhuma
+> mudança: valida horário de funcionamento, verifica disponibilidade de verdade no Calendar e,
+> se livre, cria o evento, salva na planilha e confirma; se ocupado, reaproveita "Sugerir Outro
+> Horário no WhatsApp" pedindo outro horário — sem travar e sem exigir uma nova mensagem do
+> cliente. Os nodes "Criar Evento no Calendar", "Salvar Cliente na Planilha" e "Confirmar
+> Agendamento no WhatsApp" puderam ser reaproveitados sem nenhuma alteração porque todos já
+> leem os dados via referência explícita ao node `$('Interpretar Intenção do Cliente')`, não
+> pelo item corrente — então funcionam igual não importa por qual caminho o item chegou até eles.
+>
+> Isso funciona como rede de segurança permanente: mesmo que a IA volte a classificar
+> erroneamente como "remarcar" no futuro, o cliente nunca mais fica preso em loop — o pior caso
+> passa a ser "o sistema trata como agendamento novo", que é exatamente o resultado correto.
 
 ## Nunca confirmar sem checar disponibilidade
 

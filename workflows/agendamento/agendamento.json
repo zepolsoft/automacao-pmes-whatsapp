@@ -395,6 +395,18 @@
       }
     },
     {
+      "id": "c9d0e1f2-7a8b-4c9d-8e0f-4a5b6c7d8e9f",
+      "name": "Redirecionar para Fluxo de Agendar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2320, 480],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return $input.all().map(() => {\n  const output = $('Interpretar Intenção do Cliente').first().json.output || {};\n\n  return {\n    json: {\n      output: {\n        ...output,\n        intencao: 'agendar'\n      }\n    }\n  };\n});"
+      }
+    },
+    {
       "id": "3ca67be9-db1e-457b-9255-4f9c9e3c8081",
       "name": "Verificar Disponibilidade para Remarcar",
       "type": "n8n-nodes-base.googleCalendar",
@@ -659,9 +671,10 @@
     "Encontrou Agendamento Para Remarcar?": {
       "main": [
         [{ "node": "Validar Horário de Funcionamento (Remarcar)", "type": "main", "index": 0 }],
-        [{ "node": "Avisar Sem Agendamento Ativo no WhatsApp", "type": "main", "index": 0 }]
+        [{ "node": "Redirecionar para Fluxo de Agendar", "type": "main", "index": 0 }]
       ]
     },
+    "Redirecionar para Fluxo de Agendar": { "main": [[{ "node": "Tem Data Para Agendar?", "type": "main", "index": 0 }]] },
     "Validar Horário de Funcionamento (Remarcar)": { "main": [[{ "node": "Horário Dentro do Expediente? (Remarcar)", "type": "main", "index": 0 }]] },
     "Horário Dentro do Expediente? (Remarcar)": {
       "main": [

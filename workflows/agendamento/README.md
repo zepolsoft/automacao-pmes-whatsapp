@@ -33,7 +33,9 @@ automaticamente, se houver horário livre.
    linguagem de confirmação fora dos casos `"agendar"`/`"remarcar"` — ver "Nunca confirmar
    sem checar disponibilidade" abaixo. Reações curtas do cliente (emoji isolado, "ok", "blz",
    "obrigado") também são tratadas com uma resposta natural de agradecimento, nunca com a
-   frase genérica de "não entendi" — ver o bug corrigido logo abaixo.
+   frase genérica de "não entendi" — ver o bug corrigido logo abaixo. Avisos de atraso ("vou
+   atrasar uns 10 minutos") também são tratados como `"duvida"`, sem mexer no Calendar/planilha
+   — ver o bug corrigido logo abaixo.
 7. **Corrigir Falsa Confirmação em Dúvida** (Code) — rede de segurança estrutural, independente
    do prompt: roda entre "Interpretar Intenção do Cliente" e o Switch de intenção (ver "Nunca
    confirmar sem checar disponibilidade" abaixo).
@@ -71,6 +73,15 @@ automaticamente, se houver horário livre.
    > a pergunta genérica — essa fica reservada só para mensagens realmente ambíguas ou fora de
    > contexto. A regra de "fora de escopo" ganhou uma nota explícita deixando claro que reações
    > curtas não contam como fora de escopo.
+
+   > **Melhoria (2026-09-24):** mensagens avisando atraso (ex.: "vou atrasar uns 10 minutos",
+   > "chego um pouco depois", "atrasei um pouco") não são pedido de remarcação nem de
+   > cancelamento — são só um aviso pontual sobre o mesmo horário já agendado. Nova regra na
+   > seção 5: esse tipo de mensagem continua `intencao = "duvida"` (sem alterar
+   > `data_hora_inicio`/`data_hora_fim`, sem gerar dados de remarcação), com uma
+   > confirmacao_texto breve e tranquilizadora (ex.: "Tranquilo, José! Te esperamos por aqui
+   > 😊"). Nunca aciona criação, atualização ou cancelamento de evento — o cliente segue com o
+   > mesmo horário, só avisou que vai chegar mais tarde.
 8. **Qual a Intenção do Cliente?** — Switch com base em `intencao`, com 4 saídas:
    `agendar`, `remarcar`, `cancelar` e o fallback `duvida` (qualquer outro valor, incluindo
    uma resposta inesperada da IA, cai nesse fallback e é tratado como dúvida).

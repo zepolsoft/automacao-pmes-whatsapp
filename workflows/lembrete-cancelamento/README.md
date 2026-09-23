@@ -21,7 +21,10 @@ dele: confirmar, cancelar ou remarcar.
    3. **Cliente Respondeu ou Deu Timeout?** (IF) — diferencia resposta real de timeout:
       - **Sim (respondeu):** segue para **Classificar Resposta do Lembrete** — AI Agent
         (Claude) classifica a resposta em `confirmar` / `cancelar` / `remarcar` (e, no caso de
-        remarcação, já extrai o novo dia/horário pedido) → **Confirmar, Cancelar ou
+        remarcação, já extrai o novo dia/horário pedido). Uma resposta que é só um emoji ou um
+        agradecimento curto ("ok", "blz", "obrigado", "👍") é tratada como confirmação
+        implícita — `confirmar` — em vez de cair em `decisao = "indefinido"` (ver "Histórico de
+        correções" abaixo) → **Confirmar, Cancelar ou
         Remarcar?** (Switch) — 4 caminhos:
         - **Confirmar:** envia mensagem final de confirmação.
         - **Cancelar:** deleta o evento no Calendar (pelo `event_id`) → confirma o cancelamento.
@@ -94,6 +97,17 @@ Agendamento').item.json` (nos nodes mais adiante, depois do Wait), sem nenhum lo
 
 ## Histórico de correções
 
+- **2026-09-24 — Emoji/agradecimento curto tratado como resposta não reconhecida:** cliente
+  respondendo ao lembrete com só um emoji (👍, 🙏) ou um agradecimento curto ("ok", "blz",
+  "obrigado") — normalmente reconhecendo o lembrete, sem pedir nada — caía em
+  `decisao = "indefinido"` e recebia "Desculpa, não entendi sua resposta. Você quer confirmar,
+  cancelar ou remarcar o horário?", soando robótico para algo que já era, na prática, uma
+  confirmação. Nova regra no System Message de **Classificar Resposta do Lembrete**: esse tipo
+  de resposta agora é tratado como confirmação implícita (`decisao = "confirmar"`), já que o
+  cliente só está reconhecendo a mensagem, sem pedir cancelamento ou remarcação —
+  `decisao = "indefinido"` fica reservada para respostas realmente ambíguas. Mesma regra
+  aplicada no mesmo dia ao node "Interpretar Intenção do Cliente" do workflow "Agendamento via
+  WhatsApp", que tinha o problema análogo.
 - **2026-09-24 — Bug: mensagem de timeout com dados desatualizados ("execução fantasma"):**
   cliente recebeu o lembrete às 10h36 (corte hoje às 16h), negociou remarcar em sequência
   rápida (16h30 → ocupado, 17h → confirmado com sucesso pelo workflow "Agendamento via

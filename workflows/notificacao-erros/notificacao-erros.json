@@ -1,0 +1,48 @@
+{
+  "name": "Notificação de Erros",
+  "nodes": [
+    {
+      "id": "d211506b-35ed-4f5a-a364-659f46bbc8e6",
+      "name": "Receber Erro de Workflow",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {}
+    },
+    {
+      "id": "0a7d4801-3552-492e-bf0f-f56d9e3aaec8",
+      "name": "Formatar Resumo do Erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [540, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const item = $input.first().json;\nconst execucao = item.execution || {};\nconst workflow = item.workflow || {};\nconst erro = execucao.error || {};\n\nconst nomeWorkflow = workflow.name || 'workflow desconhecido';\nconst nodeComErro = execucao.lastNodeExecuted || 'node desconhecido';\nconst mensagemErro = erro.message || 'erro sem mensagem';\nconst linkExecucao = execucao.id && workflow.id ? `https://n8n-n8n.wg1izd.easypanel.host/workflow/${workflow.id}/executions/${execucao.id}` : '';\n\nconst texto = `⚠️ Erro no workflow \"${nomeWorkflow}\"\\nNode: ${nodeComErro}\\nErro: ${mensagemErro}` + (linkExecucao ? `\\n${linkExecucao}` : '');\n\nreturn [{ json: { texto_erro: texto } }];"
+      }
+    },
+    {
+      "id": "a623acf7-2fc6-4447-a8fa-0c26b8f8eec4",
+      "name": "Notificar Erro no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [840, 300],
+      "webhookId": "aac19eeb-74bc-4463-975e-4d6c9963ba81",
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1367004446487242",
+        "recipientPhoneNumber": "5511975049937",
+        "textBody": "={{ $json.texto_erro }}",
+        "additionalFields": {}
+      }
+    }
+  ],
+  "connections": {
+    "Receber Erro de Workflow": { "main": [[{ "node": "Formatar Resumo do Erro", "type": "main", "index": 0 }]] },
+    "Formatar Resumo do Erro": { "main": [[{ "node": "Notificar Erro no WhatsApp", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  }
+}

@@ -407,6 +407,14 @@ Remarcação" (mesmo `dataTableId` nos dois):
 | `mensagens_processadas` | `message_id`, `processado_em` | deduplicação de webhooks reentregues |
 | `locks_telefone` | `telefone`, `bloqueado_em` | lock de 30s para evitar execuções paralelas do mesmo número |
 
+## Error Workflow centralizado (2026-09-24)
+
+`settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o
+workflow **[Notificação de Erros](../notificacao-erros/README.md)**: qualquer erro que não
+esteja coberto por `onError: continueRegularOutput` num node (ver seção acima sobre a rede de
+segurança de `onError`) interrompe a execução normalmente, mas também dispara aquele workflow,
+que avisa no WhatsApp com o nome do workflow, o node que falhou e o resumo do erro.
+
 ## Credenciais (placeholder)
 
 O workflow foi criado com credenciais fictícias — é preciso conectar as reais na instância n8n

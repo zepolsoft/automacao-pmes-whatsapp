@@ -385,6 +385,14 @@ os dois pontos em produção. O caminho recomendado:
 Isso não foi implementado neste protótipo para manter o foco na estrutura e lógica principal —
 fica como próximo passo antes de ir para produção.
 
+## Error Workflow centralizado (2026-09-24)
+
+`settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o
+workflow **[Notificação de Erros](../notificacao-erros/README.md)**: qualquer erro que não
+esteja coberto por `onError: continueRegularOutput` num node interrompe a execução normalmente,
+mas também dispara aquele workflow, que avisa no WhatsApp com o nome do workflow, o node que
+falhou e o resumo do erro.
+
 ## Credenciais e recursos conectados
 
 Este workflow já está conectado a credenciais e recursos reais na instância n8n (WhatsApp

@@ -488,11 +488,12 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "servico": "={{ $('Interpretar Intenção do Cliente').item.json.output.servico }}",
+            "servico": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.servico }}",
             "data": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
             "event_id": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.event_id }}",
             "status": "remarcado",
-            "preco": "={{ $('Buscar Serviços e Preços').all().find(i => i.json.servico === $('Interpretar Intenção do Cliente').item.json.output.servico)?.json.preco ?? '' }}",
+            "preco": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.preco }}",
+            "criado_em": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.criado_em }}",
             "atualizado_em": "={{ $now.toISO() }}"
           },
           "matchingColumns": ["event_id"],
@@ -606,6 +607,8 @@
           "value": {
             "event_id": "={{ $('Selecionar Agendamento Mais Recente (Cancelar)').item.json.event_id }}",
             "status": "cancelado",
+            "preco": "={{ $('Selecionar Agendamento Mais Recente (Cancelar)').item.json.preco }}",
+            "criado_em": "={{ $('Selecionar Agendamento Mais Recente (Cancelar)').item.json.criado_em }}",
             "atualizado_em": "={{ $now.toISO() }}"
           },
           "matchingColumns": ["event_id"],

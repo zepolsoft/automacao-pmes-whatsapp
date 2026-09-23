@@ -335,19 +335,35 @@ originais (`nome`, `telefone`, `servico`, `data`, `event_id`):
   (busca exata do `servico` escolhido pela IA na lista já lida no início da conversa — um
   valor copiado nesse momento, não uma fórmula/lookup dinâmico que mudaria depois se o preço do
   serviço mudasse na outra planilha) e `criado_em: {{ $now.toISO() }}`.
-- **Remarcação** ("Atualizar Linha na Planilha"): `status: "remarcado"`, `preco` recalculado
-  com a mesma expressão (caso o cliente tenha trocado de serviço ao remarcar) e
-  `atualizado_em: {{ $now.toISO() }}`. `criado_em` não é tocado (Update só grava as colunas
-  informadas).
+- **Remarcação** ("Atualizar Linha na Planilha"): grava `data`, `status: "remarcado"` e
+  `atualizado_em`. **`servico`, `preco` e `criado_em` NÃO mudam** — são reescritos com o valor
+  que já estava na linha (ver "Bug corrigido" abaixo), não recalculados; remarcar só muda o
+  horário.
 - **Cancelamento** ("Atualizar Linha na Planilha (Cancelar)", antes "Remover Linha da
   Planilha"): **mudou de `delete` para `update`** — grava `status: "cancelado"` e
-  `atualizado_em`, mas **não apaga mais a linha**. A remarcação/cancelamento no fluxo do
-  workflow "Lembrete, Cancelamento e Remarcação" segue a mesma convenção (ver o README daquele
-  workflow).
+  `atualizado_em`, mas **não apaga mais a linha**. `preco` e `criado_em` também são
+  reescritos com o valor que já estava (mesmo motivo abaixo). A remarcação/cancelamento no
+  fluxo do workflow "Lembrete, Cancelamento e Remarcação" segue a mesma convenção (ver o
+  README daquele workflow).
 
 As 6 linhas que já existiam na planilha antes dessa mudança foram preenchidas uma única vez
 com `status: "agendado"` (via um workflow utilitário temporário, executado e arquivado depois),
 para não ficarem com `status` vazio e passarem despercebidas pelos filtros novos.
+
+> **Bug corrigido (2026-09-24):** logo depois de criar essas colunas, uma remarcação de teste
+> zerou `preco` e `criado_em` na linha atualizada. Causa: o node Update Row do Google Sheets
+> escreve um **range contíguo de células**, da coluna mapeada mais à esquerda até a mais à
+> direita (nesta planilha: `servico` a `atualizado_em`) — qualquer coluna **dentro** desse
+> range que não esteja em `columns.value` é sobrescrita com vazio, mesmo sem estar listada.
+> Como `preco`/`criado_em` ficam entre `status` e `atualizado_em`, toda remarcação ou
+> cancelamento os zerava, mesmo sem eu pedir para alterá-los — e a primeira versão da
+> remarcação também recalculava `preco` via lookup, que ficava vazio sempre que o cliente não
+> repetia o serviço ao remarcar. Corrigido reenviando os valores atuais de `servico`/`preco`/
+> `criado_em` (lidos em "Selecionar Agendamento Mais Recente", que já tinha a linha completa
+> desde antes do update) em vez de omiti-los ou recalculá-los — um "no-op" que preserva o valor
+> sem depender de nenhum comportamento implícito do node. Testado com uma linha de teste
+> (criada, atualizada e removida por um workflow utilitário): `preco`/`criado_em`
+> permaneceram intactos, só `data`/`status`/`atualizado_em` mudaram.
 
 ## Credenciais (placeholder)
 

@@ -38,6 +38,18 @@ automaticamente, se houver horário livre.
    > Nova regra em REGRAS GERAIS: se já existe uma confirmação bem-sucedida na conversa e a
    > mensagem não tem pedido claro de ação, a IA trata como `intencao = "duvida"` e responde só
    > com um agradecimento curto, sem mencionar agendamentos antigos.
+
+   > **Bug corrigido (2026-09-23):** durante a negociação do primeiro horário da conversa (sem
+   > nenhum agendamento confirmado ainda), depois de duas ou três rejeições seguidas (horário
+   > fora do expediente, depois horário ocupado), a IA chegou a classificar uma nova tentativa
+   > do cliente como `intencao = "remarcar"` em vez de `"agendar"`. A regra de diferenciação
+   > "agendar" vs "remarcar" foi reescrita de forma mais explícita (`remarcar` só conta quando
+   > já existe uma mensagem de confirmação final enviada nesta conversa) e promovida para uma
+   > seção de destaque, **REGRA CRÍTICA — AGENDAR VS REMARCAR**, logo no início de
+   > "## O QUE VOCÊ DEVE IDENTIFICAR" — antes mesmo do item 1. A regra de horário de
+   > funcionamento (item 4) também foi ajustada: antes ela forçava `intencao = "agendar"`
+   > sempre que o horário pedido caía fora do expediente, o que podia sobrescrever um
+   > `"remarcar"` legítimo; agora ela preserva a intencao já determinada pela regra crítica.
 7. **Qual a Intenção do Cliente?** — Switch com base em `intencao`, com 4 saídas:
    `agendar`, `remarcar`, `cancelar` e o fallback `duvida` (qualquer outro valor, incluindo
    uma resposta inesperada da IA, cai nesse fallback e é tratado como dúvida).

@@ -10,17 +10,33 @@
       "parameters": { "rule": { "interval": [{ "triggerAtHour": 8 }] } }
     },
     {
-      "id": "8383ea32-3357-48d2-a3a2-07d6d589d641",
-      "name": "Buscar Agendamentos de Hoje",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.3,
+      "id": "d1e2f3a4-8b9c-4d0e-9f1a-5b6c7d8e9f0a",
+      "name": "Buscar Agendamentos de Hoje (Planilha)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
       "position": [464, 800],
       "parameters": {
-        "operation": "getAll",
-        "calendar": { "__rl": true, "mode": "list", "value": "zepolsoft@gmail.com", "cachedResultName": "zepol lopez" },
-        "returnAll": true,
-        "timeMin": "={{ $today }}",
-        "timeMax": "={{ $today.plus(1, 'days') }}",
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U", "cachedResultName": "Clientes - Automação PMEs", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit?usp=drivesdk" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "gid=0", "cachedResultName": "Sheet1", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit#gid=0" },
+        "options": {}
+      }
+    },
+    {
+      "id": "e2f3a4b5-9c0d-4e1f-8a2b-6c7d8e9f0a1b",
+      "name": "Filtrar Data de Hoje",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [600, 800],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            { "leftValue": "={{ DateTime.fromISO($json.data).setZone('America/Sao_Paulo').toFormat('yyyy-MM-dd') }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "={{ $today.toFormat('yyyy-MM-dd') }}" }
+          ]
+        },
         "options": {}
       }
     },
@@ -33,27 +49,13 @@
       "parameters": { "options": {} }
     },
     {
-      "id": "9b2e2e03-ff40-499a-a85d-24660b55c821",
-      "name": "Buscar Dados do Cliente na Planilha",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [912, 80],
-      "parameters": {
-        "resource": "sheet",
-        "operation": "read",
-        "documentId": { "__rl": true, "mode": "list", "value": "1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U", "cachedResultName": "Clientes - Automação PMEs", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit?usp=drivesdk" },
-        "sheetName": { "__rl": true, "mode": "list", "value": "gid=0", "cachedResultName": "Sheet1", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit#gid=0" },
-        "filtersUI": { "values": [{ "lookupColumn": "event_id", "lookupValue": "={{ $json.id }}" }] },
-        "options": { "returnFirstMatch": true }
-      }
-    },
-    {
       "id": "6946c80f-1493-4901-967c-4f0ebf935d12",
       "name": "Enviar Lembrete no WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
       "position": [1136, 80],
       "webhookId": "adf9910b-e079-40f8-9fc5-12afefecfc81",
+      "onError": "continueRegularOutput",
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
@@ -100,11 +102,12 @@
       "typeVersion": 1.1,
       "position": [1700, 300],
       "webhookId": "038d557e-5e73-480c-8599-a45dc968cbbe",
+      "onError": "continueRegularOutput",
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
-        "textBody": "=Oi {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Não recebi resposta sobre o lembrete do seu horário de {{ $('Buscar Dados do Cliente na Planilha').item.json.servico }} hoje às {{ $('Buscar Dados do Cliente na Planilha').item.json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Buscar Dados do Cliente na Planilha').item.json.data).setZone('America/Sao_Paulo')) : '' }}. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊",
+        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "textBody": "=Oi {{ $('Processar Cada Agendamento').item.json.nome }}! Não recebi resposta sobre o lembrete do seu horário de {{ $('Processar Cada Agendamento').item.json.servico }} hoje às {{ $('Processar Cada Agendamento').item.json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Processar Cada Agendamento').item.json.data).setZone('America/Sao_Paulo')) : '' }}. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊",
         "additionalFields": {}
       }
     },
@@ -138,7 +141,8 @@
         "options": {
           "systemMessage": "Você classifica a resposta de um cliente a um lembrete de agendamento de um pequeno negócio local em uma de três categorias: \"confirmar\" (o cliente confirmou o horário), \"cancelar\" (o cliente não vai mais) ou \"remarcar\" (o cliente quer outro dia/horário). Se o cliente quiser remarcar e sugerir um novo dia/horário, converta para data e hora absolutas em ISO 8601, usando a data e hora atuais informadas como referência, assumindo 1 hora de duração. Gere também um texto curto com a nova data e horário por extenso em português, para usar na resposta ao cliente. Se não for possível classificar com clareza, responda decisao como \"indefinido\"."
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "id": "61b4b5e6-ea4f-4ef1-8ac6-e89421c0dd5d",
@@ -194,11 +198,12 @@
       "typeVersion": 1.1,
       "position": [2496, -96],
       "webhookId": "5ba49bc8-cde9-4c0d-8c99-b49a2ad4f456",
+      "onError": "continueRegularOutput",
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
-        "textBody": "=Perfeito, {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Seu horário está confirmado. Até lá! 😊",
+        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "textBody": "=Perfeito, {{ $('Processar Cada Agendamento').item.json.nome }}! Seu horário está confirmado. Até lá! 😊",
         "additionalFields": {}
       }
     },
@@ -208,10 +213,11 @@
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
       "position": [2496, 96],
+      "onError": "continueRegularOutput",
       "parameters": {
         "operation": "delete",
         "calendar": { "__rl": true, "mode": "list", "value": "zepolsoft@gmail.com", "cachedResultName": "zepol lopez" },
-        "eventId": "={{ $('Buscar Dados do Cliente na Planilha').item.json.event_id }}",
+        "eventId": "={{ $('Processar Cada Agendamento').item.json.event_id }}",
         "options": {}
       }
     },
@@ -222,11 +228,12 @@
       "typeVersion": 1.1,
       "position": [2720, 176],
       "webhookId": "83479f0d-0d01-46cc-a35f-91659b3de13b",
+      "onError": "continueRegularOutput",
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
-        "textBody": "=Tudo bem, {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Seu horário foi cancelado. Quando quiser remarcar é só chamar por aqui. 😊",
+        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "textBody": "=Tudo bem, {{ $('Processar Cada Agendamento').item.json.nome }}! Seu horário foi cancelado. Quando quiser remarcar é só chamar por aqui. 😊",
         "additionalFields": {}
       }
     },
@@ -236,6 +243,7 @@
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
       "position": [2496, 288],
+      "onError": "continueRegularOutput",
       "parameters": {
         "resource": "calendar",
         "calendar": { "__rl": true, "mode": "list", "value": "zepolsoft@gmail.com", "cachedResultName": "zepol lopez" },
@@ -265,10 +273,11 @@
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
       "position": [2944, 368],
+      "onError": "continueRegularOutput",
       "parameters": {
         "operation": "update",
         "calendar": { "__rl": true, "mode": "list", "value": "zepolsoft@gmail.com", "cachedResultName": "zepol lopez" },
-        "eventId": "={{ $('Buscar Dados do Cliente na Planilha').item.json.event_id }}",
+        "eventId": "={{ $('Processar Cada Agendamento').item.json.event_id }}",
         "updateFields": {
           "start": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}",
           "end": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_fim }}"
@@ -281,6 +290,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [3168, 368],
+      "onError": "continueRegularOutput",
       "parameters": {
         "resource": "sheet",
         "operation": "update",
@@ -289,7 +299,7 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "event_id": "={{ $('Buscar Dados do Cliente na Planilha').item.json.event_id }}",
+            "event_id": "={{ $('Processar Cada Agendamento').item.json.event_id }}",
             "data": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}"
           },
           "matchingColumns": ["event_id"],
@@ -311,11 +321,12 @@
       "typeVersion": 1.1,
       "position": [3392, 608],
       "webhookId": "286239af-fdfa-42ca-9e76-bb997eeb2973",
+      "onError": "continueRegularOutput",
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
-        "textBody": "=Prontinho, {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Seu horário foi remarcado para {{ $('Classificar Resposta do Lembrete').item.json.output.resposta_sugerida }}. Até lá! 😊",
+        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "textBody": "=Prontinho, {{ $('Processar Cada Agendamento').item.json.nome }}! Seu horário foi remarcado para {{ $('Classificar Resposta do Lembrete').item.json.output.resposta_sugerida }}. Até lá! 😊",
         "additionalFields": {}
       }
     },
@@ -326,10 +337,11 @@
       "typeVersion": 1.1,
       "position": [2944, 704],
       "webhookId": "f829fc8e-d38b-41ad-8187-ed6d2cc923cd",
+      "onError": "continueRegularOutput",
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
         "textBody": "Esse novo horário já está ocupado. Pode me sugerir outro dia ou horário?",
         "additionalFields": {}
       }
@@ -341,10 +353,11 @@
       "typeVersion": 1.1,
       "position": [2496, 480],
       "webhookId": "da069701-7f5d-479b-8c7f-64bba4328fd9",
+      "onError": "continueRegularOutput",
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
         "textBody": "Desculpa, não entendi sua resposta. Você quer confirmar, cancelar ou remarcar o horário?",
         "additionalFields": {}
       }
@@ -355,7 +368,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [-48, 80],
-      "parameters": { "content": "## 1. Buscar agendamentos de hoje\nSchedule Trigger (todo dia às 8h) + Google Calendar getAll, processando um agendamento por vez.", "color": 4 }
+      "parameters": { "content": "## 1. Buscar agendamentos de hoje\nSchedule Trigger (todo dia às 8h) + leitura da planilha de clientes, filtrando pela data de hoje; processa um agendamento por vez.", "color": 4 }
     },
     {
       "id": "6c48eb8c-3a2c-4c40-aea2-95f1073c0df0",
@@ -383,9 +396,9 @@
     }
   ],
   "connections": {
-    "Disparar Lembrete Diário às 8h": { "main": [[{ "node": "Buscar Agendamentos de Hoje", "type": "main", "index": 0 }]] },
-    "Buscar Agendamentos de Hoje": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
-    "Buscar Dados do Cliente na Planilha": { "main": [[{ "node": "Enviar Lembrete no WhatsApp", "type": "main", "index": 0 }]] },
+    "Disparar Lembrete Diário às 8h": { "main": [[{ "node": "Buscar Agendamentos de Hoje (Planilha)", "type": "main", "index": 0 }]] },
+    "Buscar Agendamentos de Hoje (Planilha)": { "main": [[{ "node": "Filtrar Data de Hoje", "type": "main", "index": 0 }]] },
+    "Filtrar Data de Hoje": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Enviar Lembrete no WhatsApp": { "main": [[{ "node": "Aguardar Resposta do Cliente", "type": "main", "index": 0 }]] },
     "Aguardar Resposta do Cliente": { "main": [[{ "node": "Cliente Respondeu ou Deu Timeout?", "type": "main", "index": 0 }]] },
     "Cliente Respondeu ou Deu Timeout?": {
@@ -409,7 +422,7 @@
       ]
     },
     "Enviar Confirmação Final no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
-    "Processar Cada Agendamento": { "main": [[], [{ "node": "Buscar Dados do Cliente na Planilha", "type": "main", "index": 0 }]] },
+    "Processar Cada Agendamento": { "main": [[], [{ "node": "Enviar Lembrete no WhatsApp", "type": "main", "index": 0 }]] },
     "Cancelar Evento no Calendar": { "main": [[{ "node": "Enviar Confirmação de Cancelamento no WhatsApp", "type": "main", "index": 0 }]] },
     "Enviar Confirmação de Cancelamento no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Verificar Novo Horário Disponível": { "main": [[{ "node": "Novo Horário Disponível?", "type": "main", "index": 0 }]] },

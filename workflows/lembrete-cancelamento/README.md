@@ -8,15 +8,17 @@ dele: confirmar, cancelar ou remarcar.
 ## Fluxo
 
 1. **Disparar Lembrete Diário às 8h** — Schedule Trigger.
-2. **Buscar Agendamentos de Hoje** — Google Calendar, busca todos os eventos do dia atual.
+2. **Buscar Agendamentos de Hoje (Planilha)** — Google Sheets, lê todas as linhas da planilha
+   **"Clientes - Automação PMEs"** (aba "Sheet1") → **Filtrar Data de Hoje** (Filter) mantém só
+   as linhas cuja coluna `data` cai no dia de hoje (ver "Fonte de dados do lembrete" abaixo).
 3. **Processar Cada Agendamento** — loop (Split in Batches, um agendamento por vez). Para cada um:
-   1. **Buscar Dados do Cliente na Planilha** — encontra a linha na planilha pelo `event_id`.
-   2. **Enviar Lembrete no WhatsApp** — avisa o horário do agendamento (formatado a partir da
+   1. **Enviar Lembrete no WhatsApp** — avisa o horário do agendamento (formatado a partir da
       coluna `data`, ver "Histórico de correções" abaixo) e pergunta se confirma, cancela ou
-      quer remarcar.
-   3. **Aguardar Resposta do Cliente** — Wait node (retomado via webhook), com limite de
+      quer remarcar. Usa os dados (`nome`, `telefone`, `servico`, `data`, `event_id`) direto do
+      item da planilha que chegou nesta iteração do loop — não há mais um lookup separado.
+   2. **Aguardar Resposta do Cliente** — Wait node (retomado via webhook), com limite de
       espera de 24h (ver seção "Timeout de espera" abaixo).
-   4. **Cliente Respondeu ou Deu Timeout?** (IF) — diferencia resposta real de timeout:
+   3. **Cliente Respondeu ou Deu Timeout?** (IF) — diferencia resposta real de timeout:
       - **Sim (respondeu):** segue para **Classificar Resposta do Lembrete** — AI Agent
         (Claude) classifica a resposta em `confirmar` / `cancelar` / `remarcar` (e, no caso de
         remarcação, já extrai o novo dia/horário pedido) → **Confirmar, Cancelar ou
@@ -30,7 +32,7 @@ dele: confirmar, cancelar ou remarcar.
       - **Não (timeout):** **Avisar Timeout do Lembrete no WhatsApp** — avisa o cliente que não
         houve resposta e que o agendamento foi mantido como está. Não passa pela
         classificação/confirmação/cancelamento/remarcação.
-   5. Volta para o próximo agendamento do lote.
+   4. Volta para o próximo agendamento do lote.
 
 ## Timeout de espera no lembrete
 
@@ -51,15 +53,68 @@ em "Waiting" para sempre.
   não tem `messages[0].text`), então a expressão resulta em string vazia — condição falsa.
 - **Branch de timeout:** vai para o node **Avisar Timeout do Lembrete no WhatsApp**, que envia
   uma mensagem simples avisando que não houve resposta e que o agendamento continua como está,
-  usando `$('Buscar Dados do Cliente na Planilha')` (nome, serviço, telefone) — essa referência
+  usando `$('Processar Cada Agendamento')` (nome, serviço, telefone) — essa referência
   continua acessível mesmo após o timeout, pois esse node já rodou antes do Wait no mesmo
   caminho de execução. Depois, o fluxo volta para **Processar Cada Agendamento** para continuar
   o loop com o próximo agendamento do lote (igual a todos os outros caminhos terminais deste
   workflow) — sem isso, o loop pararia e os agendamentos seguintes do dia não seriam
   processados.
 
+## Fonte de dados do lembrete
+
+O node de busca do dia (**"Buscar Agendamentos de Hoje (Planilha)"**) lê a planilha **"Clientes
+- Automação PMEs"** (aba "Sheet1"), não o Google Calendar — ver "Histórico de correções" abaixo
+para o motivo. Cada linha já traz `nome`, `telefone`, `servico`, `data` e `event_id` prontos, o
+que elimina o lookup que existia antes.
+
+O Google Sheets não tem como filtrar por "só a parte da data" de uma coluna de datetime
+diretamente na leitura (o filtro nativo do node só faz igualdade exata contra o valor bruto da
+célula) — por isso a leitura traz **todas** as linhas, e um node **Filter** logo depois
+(**"Filtrar Data de Hoje"**) mantém só as linhas de hoje, comparando as duas datas já reduzidas
+ao formato `yyyy-MM-dd` em `America/Sao_Paulo`:
+
+```
+Esquerda: {{ DateTime.fromISO($json.data).setZone('America/Sao_Paulo').toFormat('yyyy-MM-dd') }}
+Direita:  {{ $today.toFormat('yyyy-MM-dd') }}
+Operador: string equals
+```
+
+`$today` já vem no fuso do workflow (`America/Sao_Paulo`, definido nas settings), então não
+precisa de `setZone` do lado direito. Isso ignora completamente o horário — um agendamento às
+23h59 ou à 00h01 do mesmo dia é tratado igual.
+
+A partir daqui, o item que entra em **"Processar Cada Agendamento"** já É o dado do cliente — os
+nodes seguintes (envio do lembrete, confirmação, cancelamento, atualização de evento/planilha
+na remarcação) leem tudo via `$json` (no primeiro node do loop) ou `$('Processar Cada
+Agendamento').item.json` (nos nodes mais adiante, depois do Wait), sem nenhum lookup adicional.
+
 ## Histórico de correções
 
+- **2026-09-24 — Fonte de dados trocada de Calendar para a planilha (bug: loop travava e
+  pulava clientes reais):** o Google Calendar usado como fonte (**"Buscar Agendamentos de
+  Hoje"**) é a agenda pessoal, que mistura compromissos sem cliente correspondente na planilha
+  (reuniões, entrevistas) com os agendamentos reais da barbearia. Quando o loop **"Processar
+  Cada Agendamento"** chegava num desses eventos pessoais, o lookup seguinte (**"Buscar Dados
+  do Cliente na Planilha"**, por `event_id`) não encontrava nada e os nodes seguintes, que
+  dependiam de campos como `nome`/`telefone`, falhavam — por padrão isso para a execução
+  inteira, então nenhum cliente real agendado depois daquele item no lote recebia o lembrete.
+  Correção em duas partes:
+  - **Fonte trocada para a planilha:** **"Buscar Agendamentos de Hoje"** (Calendar, `getAll`)
+    substituído por **"Buscar Agendamentos de Hoje (Planilha)"** (Google Sheets, lê todas as
+    linhas de "Clientes - Automação PMEs") → **"Filtrar Data de Hoje"** (Filter, mantém só as
+    linhas de hoje — ver "Fonte de dados do lembrete" acima). Como a planilha só tem
+    agendamentos reais, esse tipo de item "órfão" deixa de existir. O lookup **"Buscar Dados do
+    Cliente na Planilha"** foi removido (o próprio item do loop já tem tudo); todos os nodes
+    que referenciavam `$('Buscar Dados do Cliente na Planilha')` passaram a referenciar
+    `$('Processar Cada Agendamento')`.
+  - **Rede de segurança:** mesmo com a causa raiz eliminada, os nodes de envio/escrita dentro
+    do loop (WhatsApp, Calendar, Sheets — 12 nodes) ganharam `onError: continueRegularOutput`,
+    para que uma falha pontual em qualquer item (ex.: número de telefone inválido, API fora do
+    ar) não pare o processamento dos clientes seguintes do dia.
+  - **Testado manualmente** (execução de teste, `execute_workflow` em modo manual): a planilha
+    tinha 6 linhas naquele momento (datas de 22, 24 ×2, 25 e 28/09, e uma de 23/09), e o filtro
+    manteve corretamente só a linha de **23/09 às 16h (José Zavaleta, corte)** — o lembrete foi
+    enviado com sucesso só para esse número.
 - **2026-09-24 — Lembrete chegava depois da abertura e avisava sobre o dia errado:**
   - **Horário de disparo:** o Schedule Trigger rodava às 9h — exatamente quando a barbearia
     abre — então o lembrete chegava tarde demais para o cliente decidir com antecedência.

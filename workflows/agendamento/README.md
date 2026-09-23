@@ -365,6 +365,48 @@ para não ficarem com `status` vazio e passarem despercebidas pelos filtros novo
 > (criada, atualizada e removida por um workflow utilitário): `preco`/`criado_em`
 > permaneceram intactos, só `data`/`status`/`atualizado_em` mudaram.
 
+## Robustez: deduplicação, lock por telefone e data no passado (2026-09-24)
+
+Rodada de robustez pensada para não crescer a complexidade do fluxo principal — os nodes novos
+vivem num desvio curto logo depois de **Normalizar Dados da Mensagem**, antes de qualquer
+chamada à IA, planilha ou Calendar.
+
+1. **Deduplicação de mensagens** — o WhatsApp Business Cloud pode reenviar o mesmo webhook (retry
+   de rede, reentrega) para a mesma mensagem. **Normalizar Dados da Mensagem** passou a extrair
+   `message_id` (`wamid`) do payload. Dois nodes novos, usando uma Data Table
+   (`mensagens_processadas`):
+   - **Checar Mensagem Duplicada** (`get`, filtro por `message_id`) → **Mensagem Já Processada?**
+     (IF: resultado veio com `message_id`?)
+     - **Sim:** **Ignorar Mensagem Duplicada** (NoOp) — encerra sem reenviar nenhuma resposta.
+     - **Não:** **Registrar Mensagem Processada** (`insert`, grava `message_id` +
+       `processado_em`) → segue o fluxo normal.
+2. **Lock por telefone** — evita duas execuções paralelas do mesmo cliente (duas mensagens
+   seguidas bem rápidas) escrevendo ao mesmo tempo na planilha/Calendar. Logo depois de registrar
+   a mensagem como processada, usando uma segunda Data Table (`locks_telefone`):
+   - **Checar Lock do Telefone** (`get`, filtro por `telefone`) → **Telefone Ocupado?** (IF:
+     existe `bloqueado_em` com menos de 30 segundos?)
+     - **Sim:** **Ignorar Mensagem (Telefone Ocupado)** (NoOp) — encerra sem responder.
+     - **Não:** **Registrar Lock do Telefone** (`upsert`, grava `telefone` + `bloqueado_em: agora`)
+       → segue para **Buscar Serviços e Preços**.
+   - Janela de 30s fixa, sem node de "unlock" no final — decisão deliberada para manter o fluxo
+     simples; suficiente para cobrir a duração normal de uma execução, mesmo sabendo que uma
+     execução anormalmente lenta (>30s) deixaria uma segunda mensagem passar.
+3. **Validação de data no passado** — os nodes **Validar Horário de Funcionamento** e **Validar
+   Horário de Funcionamento (Remarcar)** ganharam uma condição `jaPassou` (compara o horário
+   pedido com `DateTime.now().setZone('America/Sao_Paulo')`). Um horário dentro do expediente
+   (9h-18h) mas que já passou (ex.: cliente pede "hoje às 10h" às 15h) agora cai no mesmo branch
+   de "fora do expediente" — o texto de **Avisar Horário Fora do Expediente no WhatsApp** foi
+   ajustado para cobrir os dois casos: "Esse horário já passou ou está fora do nosso expediente
+   [...]".
+
+Duas Data Tables novas no n8n, compartilhadas entre este workflow e o "Lembrete, Cancelamento e
+Remarcação" (mesmo `dataTableId` nos dois):
+
+| tabela | colunas | uso |
+|---|---|---|
+| `mensagens_processadas` | `message_id`, `processado_em` | deduplicação de webhooks reentregues |
+| `locks_telefone` | `telefone`, `bloqueado_em` | lock de 30s para evitar execuções paralelas do mesmo número |
+
 ## Credenciais (placeholder)
 
 O workflow foi criado com credenciais fictícias — é preciso conectar as reais na instância n8n

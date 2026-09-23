@@ -37,10 +37,137 @@
           "assignments": [
             { "id": "telefone", "name": "telefone", "value": "={{ $json.messages?.[0]?.from ?? \"\" }}", "type": "string" },
             { "id": "nome", "name": "nome", "value": "={{ $json.contacts?.[0]?.profile?.name ?? \"Cliente\" }}", "type": "string" },
-            { "id": "mensagem", "name": "mensagem", "value": "={{ $json.messages?.[0]?.text?.body ?? \"\" }}", "type": "string" }
+            { "id": "mensagem", "name": "mensagem", "value": "={{ $json.messages?.[0]?.text?.body ?? \"\" }}", "type": "string" },
+            { "id": "message_id", "name": "message_id", "value": "={{ $json.messages?.[0]?.id ?? \"\" }}", "type": "string" }
           ]
         },
         "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-1111-4aaa-8bbb-111111111111",
+      "name": "Checar Mensagem Duplicada",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [688, 940],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": { "__rl": true, "mode": "id", "value": "t8JczdWqhOODNWjo" },
+        "filters": { "conditions": [{ "keyName": "message_id", "condition": "eq", "keyValue": "={{ $json.message_id }}" }] },
+        "returnAll": false,
+        "limit": 1
+      }
+    },
+    {
+      "id": "a1b2c3d4-2222-4aaa-8bbb-222222222222",
+      "name": "Mensagem Já Processada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [880, 940],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [{ "leftValue": "={{ $json.message_id }}", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }, "rightValue": "" }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-3333-4aaa-8bbb-333333333333",
+      "name": "Ignorar Mensagem Duplicada",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 1080],
+      "parameters": {}
+    },
+    {
+      "id": "a1b2c3d4-4444-4aaa-8bbb-444444444444",
+      "name": "Registrar Mensagem Processada",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1072, 940],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": { "__rl": true, "mode": "id", "value": "t8JczdWqhOODNWjo" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $('Normalizar Dados da Mensagem').item.json.message_id }}",
+            "processado_em": "={{ $now.toISO() }}"
+          },
+          "schema": [
+            { "id": "message_id", "displayName": "message_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "processado_em", "displayName": "processado_em", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "canBeUsedToMatch": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-5555-4aaa-8bbb-555555555555",
+      "name": "Checar Lock do Telefone",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1264, 940],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": { "__rl": true, "mode": "id", "value": "IIzfVI1CvTwlAiSb" },
+        "filters": { "conditions": [{ "keyName": "telefone", "condition": "eq", "keyValue": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}" }] },
+        "returnAll": false,
+        "limit": 1
+      }
+    },
+    {
+      "id": "a1b2c3d4-6666-4aaa-8bbb-666666666666",
+      "name": "Telefone Ocupado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1456, 940],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [{ "leftValue": "={{ $json.bloqueado_em ? (DateTime.fromISO($json.bloqueado_em) > DateTime.now().minus({ seconds: 30 })) : false }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-7777-4aaa-8bbb-777777777777",
+      "name": "Ignorar Mensagem (Telefone Ocupado)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1456, 1080],
+      "parameters": {}
+    },
+    {
+      "id": "a1b2c3d4-8888-4aaa-8bbb-888888888888",
+      "name": "Registrar Lock do Telefone",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1648, 940],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": { "__rl": true, "mode": "id", "value": "IIzfVI1CvTwlAiSb" },
+        "matchType": "allConditions",
+        "filters": { "conditions": [{ "keyName": "telefone", "condition": "eq", "keyValue": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}" }] },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefone": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
+            "bloqueado_em": "={{ $now.toISO() }}"
+          },
+          "schema": [
+            { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "bloqueado_em", "displayName": "bloqueado_em", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "canBeUsedToMatch": false }
+          ]
+        }
       }
     },
     {
@@ -173,7 +300,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "return $input.all().map(item => {\n  const output = item.json.output || {};\n  const inicio = DateTime.fromISO(output.data_hora_inicio, { zone: 'America/Sao_Paulo' });\n  const fim = DateTime.fromISO(output.data_hora_fim, { zone: 'America/Sao_Paulo' });\n\n  const abertura = 9 * 60;\n  const fechamento = 18 * 60;\n  const minutosInicio = inicio.hour * 60 + inicio.minute;\n  const minutosFim = fim.hour * 60 + fim.minute;\n  const domingo = inicio.weekday === 7;\n\n  const dentroDoExpediente =\n    inicio.isValid &&\n    fim.isValid &&\n    !domingo &&\n    minutosInicio >= abertura &&\n    minutosInicio < fechamento &&\n    minutosFim <= fechamento;\n\n  return { json: { ...item.json, dentro_do_expediente: dentroDoExpediente } };\n});"
+        "jsCode": "return $input.all().map(item => {\n  const output = item.json.output || {};\n  const inicio = DateTime.fromISO(output.data_hora_inicio, { zone: 'America/Sao_Paulo' });\n  const fim = DateTime.fromISO(output.data_hora_fim, { zone: 'America/Sao_Paulo' });\n\n  const abertura = 9 * 60;\n  const fechamento = 18 * 60;\n  const minutosInicio = inicio.hour * 60 + inicio.minute;\n  const minutosFim = fim.hour * 60 + fim.minute;\n  const domingo = inicio.weekday === 7;\n  const jaPassou = inicio.isValid && inicio < DateTime.now().setZone('America/Sao_Paulo');\n\n  const dentroDoExpediente =\n    inicio.isValid &&\n    fim.isValid &&\n    !domingo &&\n    !jaPassou &&\n    minutosInicio >= abertura &&\n    minutosInicio < fechamento &&\n    minutosFim <= fechamento;\n\n  return { json: { ...item.json, dentro_do_expediente: dentroDoExpediente } };\n});"
       }
     },
     {
@@ -203,7 +330,7 @@
         "operation": "send",
         "phoneNumberId": "<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>",
         "recipientPhoneNumber": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
-        "textBody": "=A barbearia funciona de segunda a sábado, das 9h às 18h, e esse horário fica fora desse período. Pode me dizer outro dia ou horário dentro desse intervalo que eu já verifico a disponibilidade? 🙂",
+        "textBody": "=Esse horário já passou ou está fora do nosso expediente (funcionamos de segunda a sábado, das 9h às 18h). Pode me dizer outro dia ou horário, por favor? 🙂",
         "additionalFields": {}
       }
     },
@@ -216,7 +343,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "return $input.all().map(item => {\n  const output = $('Interpretar Intenção do Cliente').first().json.output || {};\n  const inicio = DateTime.fromISO(output.data_hora_inicio, { zone: 'America/Sao_Paulo' });\n  const fim = DateTime.fromISO(output.data_hora_fim, { zone: 'America/Sao_Paulo' });\n\n  const abertura = 9 * 60;\n  const fechamento = 18 * 60;\n  const minutosInicio = inicio.hour * 60 + inicio.minute;\n  const minutosFim = fim.hour * 60 + fim.minute;\n  const domingo = inicio.weekday === 7;\n\n  const dentroDoExpediente =\n    inicio.isValid &&\n    fim.isValid &&\n    !domingo &&\n    minutosInicio >= abertura &&\n    minutosInicio < fechamento &&\n    minutosFim <= fechamento;\n\n  return { json: { ...item.json, dentro_do_expediente: dentroDoExpediente } };\n});"
+        "jsCode": "return $input.all().map(item => {\n  const output = $('Interpretar Intenção do Cliente').first().json.output || {};\n  const inicio = DateTime.fromISO(output.data_hora_inicio, { zone: 'America/Sao_Paulo' });\n  const fim = DateTime.fromISO(output.data_hora_fim, { zone: 'America/Sao_Paulo' });\n\n  const abertura = 9 * 60;\n  const fechamento = 18 * 60;\n  const minutosInicio = inicio.hour * 60 + inicio.minute;\n  const minutosFim = fim.hour * 60 + fim.minute;\n  const domingo = inicio.weekday === 7;\n  const jaPassou = inicio.isValid && inicio < DateTime.now().setZone('America/Sao_Paulo');\n\n  const dentroDoExpediente =\n    inicio.isValid &&\n    fim.isValid &&\n    !domingo &&\n    !jaPassou &&\n    minutosInicio >= abertura &&\n    minutosInicio < fechamento &&\n    minutosFim <= fechamento;\n\n  return { json: { ...item.json, dentro_do_expediente: dentroDoExpediente } };\n});"
       }
     },
     {
@@ -679,7 +806,23 @@
   "connections": {
     "Receber Mensagem WhatsApp": { "main": [[{ "node": "Filtrar Apenas Mensagens", "type": "main", "index": 0 }]] },
     "Filtrar Apenas Mensagens": { "main": [[{ "node": "Normalizar Dados da Mensagem", "type": "main", "index": 0 }]] },
-    "Normalizar Dados da Mensagem": { "main": [[{ "node": "Buscar Serviços e Preços", "type": "main", "index": 0 }]] },
+    "Normalizar Dados da Mensagem": { "main": [[{ "node": "Checar Mensagem Duplicada", "type": "main", "index": 0 }]] },
+    "Checar Mensagem Duplicada": { "main": [[{ "node": "Mensagem Já Processada?", "type": "main", "index": 0 }]] },
+    "Mensagem Já Processada?": {
+      "main": [
+        [{ "node": "Ignorar Mensagem Duplicada", "type": "main", "index": 0 }],
+        [{ "node": "Registrar Mensagem Processada", "type": "main", "index": 0 }]
+      ]
+    },
+    "Registrar Mensagem Processada": { "main": [[{ "node": "Checar Lock do Telefone", "type": "main", "index": 0 }]] },
+    "Checar Lock do Telefone": { "main": [[{ "node": "Telefone Ocupado?", "type": "main", "index": 0 }]] },
+    "Telefone Ocupado?": {
+      "main": [
+        [{ "node": "Ignorar Mensagem (Telefone Ocupado)", "type": "main", "index": 0 }],
+        [{ "node": "Registrar Lock do Telefone", "type": "main", "index": 0 }]
+      ]
+    },
+    "Registrar Lock do Telefone": { "main": [[{ "node": "Buscar Serviços e Preços", "type": "main", "index": 0 }]] },
     "Buscar Serviços e Preços": { "main": [[{ "node": "Formatar Lista de Serviços", "type": "main", "index": 0 }]] },
     "Formatar Lista de Serviços": { "main": [[{ "node": "Interpretar Intenção do Cliente", "type": "main", "index": 0 }]] },
     "Interpretar Intenção do Cliente": { "main": [[{ "node": "Corrigir Falsa Confirmação em Dúvida", "type": "main", "index": 0 }]] },

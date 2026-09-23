@@ -161,6 +161,39 @@ filtro do lembrete diário) e **escreve** `status`/`atualizado_em` em três pont
 > lido) em vez de omiti-los. Mesmo bug e mesma correção no workflow "Agendamento via WhatsApp" —
 > ver o README daquele workflow para o teste que validou a correção.
 
+## Robustez: deduplicação, lock por telefone e data no passado (2026-09-24)
+
+Mesma rodada de robustez aplicada em `workflows/agendamento/README.md` (seção "Robustez:
+deduplicação, lock por telefone e data no passado"), replicada aqui com os mesmos nomes de node e
+as mesmas duas Data Tables (`mensagens_processadas`, `locks_telefone` — compartilhadas entre os
+dois workflows, mesmo `dataTableId`):
+
+1. **Deduplicação de mensagens** — **Normalizar Resposta do Lembrete** passou a extrair
+   `message_id` (`wamid`) do payload. **Checar Mensagem Duplicada** (`get`) →
+   **Mensagem Já Processada?** (IF) → se já processada, **Ignorar Mensagem Duplicada** (NoOp,
+   volta direto para **Processar Cada Agendamento** para não travar o loop); se não,
+   **Registrar Mensagem Processada** (`insert`) → segue para o lock de telefone.
+2. **Lock por telefone** — **Checar Lock do Telefone** (`get`) → **Telefone Ocupado?** (IF:
+   `bloqueado_em` com menos de 30s?) → se ocupado, **Ignorar Mensagem (Telefone Ocupado)** (NoOp,
+   volta para **Processar Cada Agendamento**); se não, **Registrar Lock do Telefone** (`upsert`)
+   → segue para **Classificar Resposta do Lembrete**. Como este workflow tem um loop (Split in
+   Batches), os dois nodes `NoOp` de "ignorar" precisam voltar para **Processar Cada
+   Agendamento** — sem essa conexão de volta, o loop pararia no primeiro item duplicado/travado
+   e os agendamentos seguintes do lote não seriam processados.
+3. **Validação de data no passado** — **Validar Horário de Funcionamento** ganhou a mesma
+   condição `jaPassou` do outro workflow, e o texto de **Avisar Horário Fora do Expediente no
+   WhatsApp** foi ajustado para "Esse horário já passou ou está fora do nosso expediente [...]".
+
+> **Bug corrigido (2026-09-24):** ao aplicar essa rodada nos dois workflows, os nodes
+> **Checar Mensagem Duplicada** e **Checar Lock do Telefone** ficaram sem `alwaysOutputData:
+> true` neste workflow (diferente do "Agendamento via WhatsApp", que já tinha desde o início).
+> Sem essa opção, uma busca na Data Table que não encontra nenhuma linha — o caso normal, de
+> mensagem nova e telefone sem lock ativo — não produz nenhum item de saída, e o IF logo depois
+> (**Mensagem Já Processada?**/**Telefone Ocupado?**) nunca roda: o loop simplesmente parava
+> nesse ponto para todo cliente, travando o fluxo inteiro de resposta ao lembrete (confirmar,
+> cancelar e remarcar nunca eram processados). Corrigido adicionando `alwaysOutputData: true`
+> nos dois nodes.
+
 ## Histórico de correções
 
 - **2026-09-24 — Ciclo de vida do agendamento (status na planilha):** a planilha ganhou as

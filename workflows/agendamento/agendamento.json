@@ -298,7 +298,10 @@
             "nome": "={{ $('Interpretar Intenção do Cliente').item.json.output.nome_cliente }}",
             "telefone": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}",
             "servico": "={{ $('Interpretar Intenção do Cliente').item.json.output.servico }}",
-            "data": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}"
+            "data": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
+            "status": "agendado",
+            "preco": "={{ $('Buscar Serviços e Preços').all().find(i => i.json.servico === $('Interpretar Intenção do Cliente').item.json.output.servico)?.json.preco ?? '' }}",
+            "criado_em": "={{ $now.toISO() }}"
           },
           "matchingColumns": [],
           "schema": [
@@ -306,7 +309,11 @@
             { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "servico", "displayName": "servico", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "data", "displayName": "data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "preco", "displayName": "preco", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "criado_em", "displayName": "criado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "atualizado_em", "displayName": "atualizado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
           ],
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
@@ -483,7 +490,10 @@
           "value": {
             "servico": "={{ $('Interpretar Intenção do Cliente').item.json.output.servico }}",
             "data": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
-            "event_id": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.event_id }}"
+            "event_id": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.event_id }}",
+            "status": "remarcado",
+            "preco": "={{ $('Buscar Serviços e Preços').all().find(i => i.json.servico === $('Interpretar Intenção do Cliente').item.json.output.servico)?.json.preco ?? '' }}",
+            "atualizado_em": "={{ $now.toISO() }}"
           },
           "matchingColumns": ["event_id"],
           "schema": [
@@ -491,7 +501,11 @@
             { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "servico", "displayName": "servico", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "data", "displayName": "data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "preco", "displayName": "preco", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "criado_em", "displayName": "criado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "atualizado_em", "displayName": "atualizado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
           ]
         }
       }
@@ -578,18 +592,38 @@
     },
     {
       "id": "4c77f91a-7b2b-471f-9e3a-a17808a4d60e",
-      "name": "Remover Linha da Planilha",
+      "name": "Atualizar Linha na Planilha (Cancelar)",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [2400, 900],
       "parameters": {
         "resource": "sheet",
-        "operation": "delete",
+        "operation": "update",
         "documentId": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos WhatsApp" },
         "sheetName": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos" },
-        "toDelete": "rows",
-        "startIndex": "={{ $('Selecionar Agendamento Mais Recente (Cancelar)').item.json.row_number }}",
-        "numberToDelete": 1
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_id": "={{ $('Selecionar Agendamento Mais Recente (Cancelar)').item.json.event_id }}",
+            "status": "cancelado",
+            "atualizado_em": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": ["event_id"],
+          "schema": [
+            { "id": "nome", "displayName": "nome", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "servico", "displayName": "servico", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "data", "displayName": "data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "event_id", "displayName": "event_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "preco", "displayName": "preco", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "criado_em", "displayName": "criado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "atualizado_em", "displayName": "atualizado_em", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
       }
     },
     {
@@ -714,8 +748,8 @@
         [{ "node": "Avisar Sem Agendamento Ativo no WhatsApp", "type": "main", "index": 0 }]
       ]
     },
-    "Cancelar Evento no Calendar": { "main": [[{ "node": "Remover Linha da Planilha", "type": "main", "index": 0 }]] },
-    "Remover Linha da Planilha": { "main": [[{ "node": "Confirmar Cancelamento no WhatsApp", "type": "main", "index": 0 }]] }
+    "Cancelar Evento no Calendar": { "main": [[{ "node": "Atualizar Linha na Planilha (Cancelar)", "type": "main", "index": 0 }]] },
+    "Atualizar Linha na Planilha (Cancelar)": { "main": [[{ "node": "Confirmar Cancelamento no WhatsApp", "type": "main", "index": 0 }]] }
   },
   "settings": {
     "executionOrder": "v1",

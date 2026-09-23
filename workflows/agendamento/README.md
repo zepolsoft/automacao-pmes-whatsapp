@@ -100,8 +100,10 @@ automaticamente, se houver horário livre.
      funciona das 9h às 18h (seg-sáb) e pede outro horário, sem consultar o Calendar.
 11. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
 12. **Horário Disponível?**
-   - **Sim:** Cria o evento no Calendar → salva nome, telefone, serviço, data e `event_id` na
-     planilha do Google Sheets → confirma o agendamento no WhatsApp.
+   - **Sim:** Cria o evento no Calendar → salva nome, telefone, serviço, data, `event_id`,
+     `status: "agendado"`, `preco` (copiado de "Buscar Serviços e Preços" nesse momento — ver
+     "Colunas de status e preço na planilha" abaixo) e `criado_em` na planilha do Google Sheets
+     → confirma o agendamento no WhatsApp.
    - **Não:** responde no WhatsApp pedindo outro dia/horário.
 
    > **Bug corrigido (2026-09-22):** o node "Confirmar Agendamento no WhatsApp" tinha um texto
@@ -134,7 +136,8 @@ automaticamente, se houver horário livre.
        "Remarcar para horário próximo do atual" abaixo) → **Novo Horário Disponível?**
      - **Sim:** **Atualizar Evento no Calendar** (`update`, usando o `event_id` encontrado) →
        **Atualizar Linha na Planilha** (`update`, casando pela coluna `event_id`, atualizando
-       `servico` e `data`) → confirma a remarcação no WhatsApp.
+       `servico`, `data`, `status: "remarcado"`, `preco` recalculado e `atualizado_em`) →
+       confirma a remarcação no WhatsApp.
      - **Não:** reaproveita o node "Sugerir Outro Horário no WhatsApp" do fluxo de agendar.
 
    > **Bug corrigido (2026-09-22):** o node "Confirmar Remarcação no WhatsApp" tinha um texto
@@ -149,8 +152,9 @@ automaticamente, se houver horário livre.
    **Encontrou Agendamento Para Cancelar?** — mesma lógica de busca do fluxo de remarcar.
    - **Não encontrou:** reaproveita o node que avisa que não há agendamento ativo.
    - **Encontrou:** **Cancelar Evento no Calendar** (`delete`, usando o `event_id`) →
-     **Remover Linha da Planilha** (`delete` de linha, usando o `row_number` que o Google
-     Sheets retorna automaticamente na leitura) → confirma o cancelamento no WhatsApp.
+     **Atualizar Linha na Planilha (Cancelar)** (`update`, casando pela coluna `event_id`,
+     grava `status: "cancelado"` e `atualizado_em` — **não apaga mais a linha**, ver "Colunas
+     de status e preço na planilha" abaixo) → confirma o cancelamento no WhatsApp.
 
 ### Saída "duvida" (fallback)
 
@@ -310,6 +314,40 @@ prompt de **Interpretar Intenção do Cliente**. A partir disso, o prompt foi aj
   1 hora padrão apenas se o serviço não estiver listado.
 - Responder perguntas de `duvida` sobre serviços/preços com base na lista, sem inventar valores
   que não estejam nela.
+
+## Colunas de status e preço na planilha (2026-09-24)
+
+A planilha **"Clientes - Automação PMEs"** (Sheet1) ganhou 4 colunas novas, à direita das 5
+originais (`nome`, `telefone`, `servico`, `data`, `event_id`):
+
+| coluna | valores | quem escreve |
+|---|---|---|
+| `status` | `agendado`, `remarcado`, `cancelado`, `concluido`, `no_show` | os fluxos abaixo; `no_show` é só manual, direto na planilha |
+| `preco` | valor copiado da planilha "Serviços - Barbearia" | ao criar/remarcar |
+| `criado_em` | timestamp ISO (`America/Sao_Paulo`) | só na criação |
+| `atualizado_em` | timestamp ISO | em qualquer escrita posterior (remarcar/cancelar) |
+
+- **Criação** ("Salvar Cliente na Planilha"): `status: "agendado"`, `preco` calculado por
+  ```
+  {{ $('Buscar Serviços e Preços').all().find(i => i.json.servico === $('Interpretar Intenção
+  do Cliente').item.json.output.servico)?.json.preco ?? '' }}
+  ```
+  (busca exata do `servico` escolhido pela IA na lista já lida no início da conversa — um
+  valor copiado nesse momento, não uma fórmula/lookup dinâmico que mudaria depois se o preço do
+  serviço mudasse na outra planilha) e `criado_em: {{ $now.toISO() }}`.
+- **Remarcação** ("Atualizar Linha na Planilha"): `status: "remarcado"`, `preco` recalculado
+  com a mesma expressão (caso o cliente tenha trocado de serviço ao remarcar) e
+  `atualizado_em: {{ $now.toISO() }}`. `criado_em` não é tocado (Update só grava as colunas
+  informadas).
+- **Cancelamento** ("Atualizar Linha na Planilha (Cancelar)", antes "Remover Linha da
+  Planilha"): **mudou de `delete` para `update`** — grava `status: "cancelado"` e
+  `atualizado_em`, mas **não apaga mais a linha**. A remarcação/cancelamento no fluxo do
+  workflow "Lembrete, Cancelamento e Remarcação" segue a mesma convenção (ver o README daquele
+  workflow).
+
+As 6 linhas que já existiam na planilha antes dessa mudança foram preenchidas uma única vez
+com `status: "agendado"` (via um workflow utilitário temporário, executado e arquivado depois),
+para não ficarem com `status` vazio e passarem despercebidas pelos filtros novos.
 
 ## Credenciais (placeholder)
 

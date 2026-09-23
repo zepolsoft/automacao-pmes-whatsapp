@@ -3,15 +3,15 @@
   "nodes": [
     {
       "id": "f91c7588-798b-45b7-a29f-0f9c74253b76",
-      "name": "Disparar Lembrete Diário às 9h",
+      "name": "Disparar Lembrete Diário às 8h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.4,
       "position": [240, 800],
-      "parameters": { "rule": { "interval": [{ "triggerAtHour": 9 }] } }
+      "parameters": { "rule": { "interval": [{ "triggerAtHour": 8 }] } }
     },
     {
       "id": "8383ea32-3357-48d2-a3a2-07d6d589d641",
-      "name": "Buscar Agendamentos de Amanhã",
+      "name": "Buscar Agendamentos de Hoje",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
       "position": [464, 800],
@@ -19,8 +19,8 @@
         "operation": "getAll",
         "calendar": { "__rl": true, "mode": "list", "value": "zepolsoft@gmail.com", "cachedResultName": "zepol lopez" },
         "returnAll": true,
-        "timeMin": "={{ $today.plus(1, 'days') }}",
-        "timeMax": "={{ $today.plus(2, 'days') }}",
+        "timeMin": "={{ $today }}",
+        "timeMax": "={{ $today.plus(1, 'days') }}",
         "options": {}
       }
     },
@@ -58,7 +58,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $json.telefone.toString() }}",
-        "textBody": "=Oi {{ $json.nome }}! Passando para lembrar do seu horário de {{ $json.servico }} amanhã às {{ $json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($json.data).setZone('America/Sao_Paulo')) : '' }}. Você confirma, quer cancelar ou prefere remarcar?",
+        "textBody": "=Oi {{ $json.nome }}! Passando para lembrar do seu horário de {{ $json.servico }} hoje às {{ $json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($json.data).setZone('America/Sao_Paulo')) : '' }}. Você confirma, quer cancelar ou prefere remarcar?",
         "additionalFields": {}
       }
     },
@@ -104,7 +104,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
-        "textBody": "=Oi {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Não recebi resposta sobre o lembrete do seu horário de {{ $('Buscar Dados do Cliente na Planilha').item.json.servico }} amanhã às {{ $('Buscar Dados do Cliente na Planilha').item.json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Buscar Dados do Cliente na Planilha').item.json.data).setZone('America/Sao_Paulo')) : '' }}. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊",
+        "textBody": "=Oi {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Não recebi resposta sobre o lembrete do seu horário de {{ $('Buscar Dados do Cliente na Planilha').item.json.servico }} hoje às {{ $('Buscar Dados do Cliente na Planilha').item.json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Buscar Dados do Cliente na Planilha').item.json.data).setZone('America/Sao_Paulo')) : '' }}. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊",
         "additionalFields": {}
       }
     },
@@ -355,7 +355,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [-48, 80],
-      "parameters": { "content": "## 1. Buscar agendamentos de amanhã\nSchedule Trigger (todo dia às 9h) + Google Calendar getAll, processando um agendamento por vez.", "color": 4 }
+      "parameters": { "content": "## 1. Buscar agendamentos de hoje\nSchedule Trigger (todo dia às 8h) + Google Calendar getAll, processando um agendamento por vez.", "color": 4 }
     },
     {
       "id": "6c48eb8c-3a2c-4c40-aea2-95f1073c0df0",
@@ -383,8 +383,8 @@
     }
   ],
   "connections": {
-    "Disparar Lembrete Diário às 9h": { "main": [[{ "node": "Buscar Agendamentos de Amanhã", "type": "main", "index": 0 }]] },
-    "Buscar Agendamentos de Amanhã": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Disparar Lembrete Diário às 8h": { "main": [[{ "node": "Buscar Agendamentos de Hoje", "type": "main", "index": 0 }]] },
+    "Buscar Agendamentos de Hoje": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Buscar Dados do Cliente na Planilha": { "main": [[{ "node": "Enviar Lembrete no WhatsApp", "type": "main", "index": 0 }]] },
     "Enviar Lembrete no WhatsApp": { "main": [[{ "node": "Aguardar Resposta do Cliente", "type": "main", "index": 0 }]] },
     "Aguardar Resposta do Cliente": { "main": [[{ "node": "Cliente Respondeu ou Deu Timeout?", "type": "main", "index": 0 }]] },

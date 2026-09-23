@@ -2,13 +2,13 @@
 
 Workflow n8n: [`lembrete-cancelamento.json`](./lembrete-cancelamento.json) · [abrir na instância](https://n8n-n8n.wg1izd.easypanel.host/workflow/wkIfUOGhEom4rFow)
 
-Todo dia às 9h, avisa cada cliente com horário marcado para o dia seguinte e trata a resposta
+Todo dia às 8h, avisa cada cliente com horário marcado para o dia atual e trata a resposta
 dele: confirmar, cancelar ou remarcar.
 
 ## Fluxo
 
-1. **Disparar Lembrete Diário às 9h** — Schedule Trigger.
-2. **Buscar Agendamentos de Amanhã** — Google Calendar, busca todos os eventos do dia seguinte.
+1. **Disparar Lembrete Diário às 8h** — Schedule Trigger.
+2. **Buscar Agendamentos de Hoje** — Google Calendar, busca todos os eventos do dia atual.
 3. **Processar Cada Agendamento** — loop (Split in Batches, um agendamento por vez). Para cada um:
    1. **Buscar Dados do Cliente na Planilha** — encontra a linha na planilha pelo `event_id`.
    2. **Enviar Lembrete no WhatsApp** — avisa o horário do agendamento (formatado a partir da
@@ -60,6 +60,28 @@ em "Waiting" para sempre.
 
 ## Histórico de correções
 
+- **2026-09-24 — Lembrete chegava depois da abertura e avisava sobre o dia errado:**
+  - **Horário de disparo:** o Schedule Trigger rodava às 9h — exatamente quando a barbearia
+    abre — então o lembrete chegava tarde demais para o cliente decidir com antecedência.
+    Renomeado de **"Disparar Lembrete Diário às 9h"** para **"Disparar Lembrete Diário às 8h"**
+    e `triggerAtHour` ajustado de `9` para `8` (mesmo fuso `America/Sao_Paulo`, já configurado
+    nas settings do workflow).
+  - **Dia errado buscado:** o node de busca no Calendar (`getAll`) usava
+    `timeMin: {{ $today.plus(1, 'days') }}` / `timeMax: {{ $today.plus(2, 'days') }}` — ou seja,
+    buscava os agendamentos de **amanhã**, não os de hoje, e a mensagem dizia "amanhã às
+    14h" para um agendamento que era, na verdade, do dia seguinte à execução. Renomeado de
+    **"Buscar Agendamentos de Amanhã"** para **"Buscar Agendamentos de Hoje"**, com
+    `timeMin: {{ $today }}` / `timeMax: {{ $today.plus(1, 'days') }}` (00:00 de hoje até 00:00
+    de amanhã, cobrindo o dia inteiro). As mensagens de **Enviar Lembrete no WhatsApp** e
+    **Avisar Timeout do Lembrete no WhatsApp** trocaram "amanhã" por "hoje".
+  - **Loop processando só 1 cliente:** investigado na execução de produção mais recente (nº
+    381) — o node **Processar Cada Agendamento** (Split In Batches) já processava corretamente
+    todos os eventos retornados pelo Calendar naquele dia (2 eventos → 2 iterações → 2
+    mensagens de WhatsApp enviadas, uma por evento), e **Buscar Dados do Cliente na Planilha**
+    / **Enviar Lembrete no WhatsApp** já usam o item corrente (`$json`) da iteração, não um
+    item fixo. Não havia bug no loop: no dia da execução investigada só existia uma cliente
+    (Veridiana) com dois agendamentos diferentes, por isso pareceu "1 lembrete" quando na
+    verdade foram 2 mensagens distintas, uma para cada horário dela.
 - **2026-09-24 — Lembrete e aviso de timeout sem o horário do agendamento:** as mensagens de
   **Enviar Lembrete no WhatsApp** e **Avisar Timeout do Lembrete no WhatsApp** mencionavam o
   serviço e "amanhã", mas nunca o horário — o cliente recebia "Passando para lembrar do seu

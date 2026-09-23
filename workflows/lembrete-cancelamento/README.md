@@ -11,7 +11,9 @@ dele: confirmar, cancelar ou remarcar.
 2. **Buscar Agendamentos de Amanhã** — Google Calendar, busca todos os eventos do dia seguinte.
 3. **Processar Cada Agendamento** — loop (Split in Batches, um agendamento por vez). Para cada um:
    1. **Buscar Dados do Cliente na Planilha** — encontra a linha na planilha pelo `event_id`.
-   2. **Enviar Lembrete no WhatsApp** — pergunta se confirma, cancela ou quer remarcar.
+   2. **Enviar Lembrete no WhatsApp** — avisa o horário do agendamento (formatado a partir da
+      coluna `data`, ver "Histórico de correções" abaixo) e pergunta se confirma, cancela ou
+      quer remarcar.
    3. **Aguardar Resposta do Cliente** — Wait node (retomado via webhook), com limite de
       espera de 24h (ver seção "Timeout de espera" abaixo).
    4. **Cliente Respondeu ou Deu Timeout?** (IF) — diferencia resposta real de timeout:
@@ -58,6 +60,23 @@ em "Waiting" para sempre.
 
 ## Histórico de correções
 
+- **2026-09-24 — Lembrete e aviso de timeout sem o horário do agendamento:** as mensagens de
+  **Enviar Lembrete no WhatsApp** e **Avisar Timeout do Lembrete no WhatsApp** mencionavam o
+  serviço e "amanhã", mas nunca o horário — o cliente recebia "Passando para lembrar do seu
+  horário de corte amanhã" sem saber a que horas era. Corrigido formatando a coluna `data` da
+  planilha (ISO 8601, ex. `2026-09-24T14:00:00-03:00`) com Luxon, em `America/Sao_Paulo`, no
+  formato natural em português (`14h` quando os minutos são zero, `14h30` quando não são):
+  ```
+  {{ $json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($json.data).setZone('America/Sao_Paulo')) : '' }}
+  ```
+  Em **Enviar Lembrete no WhatsApp** a expressão lê `$json.data` (item corrente, saído direto de
+  "Buscar Dados do Cliente na Planilha"); em **Avisar Timeout do Lembrete no WhatsApp** ela lê
+  `$('Buscar Dados do Cliente na Planilha').item.json.data`, já que esse node está depois do
+  Wait/timeout e precisa da referência nomeada ao node de origem. Os outros nodes de envio do
+  workflow (confirmação final, cancelamento, remarcação, pedir outro horário, pedir
+  esclarecimento) não precisaram do mesmo ajuste: a remarcação já usa
+  `resposta_sugerida` (texto por extenso gerado pela IA com a nova data/horário) e os demais não
+  fazem referência a um horário específico.
 - **2026-09-22 — Lembretes/atualizações duplicadas na planilha (causa raiz):**
   - **Buscar Dados do Cliente na Planilha** (Google Sheets) estava sem `resource`/`operation`/
     filtro nenhum configurado (lia sem localizar a linha certa). Corrigido para

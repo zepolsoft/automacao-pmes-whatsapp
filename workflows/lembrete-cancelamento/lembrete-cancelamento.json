@@ -58,7 +58,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $json.telefone.toString() }}",
-        "textBody": "=Oi {{ $json.nome }}! Passando para lembrar do seu horário de {{ $json.servico }} amanhã. Você confirma, quer cancelar ou prefere remarcar?",
+        "textBody": "=Oi {{ $json.nome }}! Passando para lembrar do seu horário de {{ $json.servico }} amanhã às {{ $json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($json.data).setZone('America/Sao_Paulo')) : '' }}. Você confirma, quer cancelar ou prefere remarcar?",
         "additionalFields": {}
       }
     },
@@ -104,7 +104,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Buscar Dados do Cliente na Planilha').item.json.telefone }}",
-        "textBody": "=Oi {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Não recebi resposta sobre o lembrete do seu horário de {{ $('Buscar Dados do Cliente na Planilha').item.json.servico }} amanhã. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊",
+        "textBody": "=Oi {{ $('Buscar Dados do Cliente na Planilha').item.json.nome }}! Não recebi resposta sobre o lembrete do seu horário de {{ $('Buscar Dados do Cliente na Planilha').item.json.servico }} amanhã às {{ $('Buscar Dados do Cliente na Planilha').item.json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Buscar Dados do Cliente na Planilha').item.json.data).setZone('America/Sao_Paulo')) : '' }}. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊",
         "additionalFields": {}
       }
     },

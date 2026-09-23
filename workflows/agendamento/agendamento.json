@@ -408,16 +408,30 @@
     },
     {
       "id": "3ca67be9-db1e-457b-9255-4f9c9e3c8081",
-      "name": "Verificar Disponibilidade para Remarcar",
+      "name": "Listar Eventos no Novo Horário (Remarcar)",
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
       "position": [2476, 610],
       "parameters": {
-        "resource": "calendar",
+        "resource": "event",
+        "operation": "getAll",
+        "returnAll": true,
         "calendar": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agenda do Negócio" },
         "timeMin": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
         "timeMax": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_fim }}",
         "options": {}
+      }
+    },
+    {
+      "id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b",
+      "name": "Verificar Disponibilidade para Remarcar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2476, 672],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const eventoAtualId = $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.event_id;\n\nconst conflitos = $input.all().filter(item => item.json.id !== eventoAtualId);\n\nreturn [{ json: { available: conflitos.length === 0 } }];"
       }
     },
     {
@@ -678,10 +692,11 @@
     "Validar Horário de Funcionamento (Remarcar)": { "main": [[{ "node": "Horário Dentro do Expediente? (Remarcar)", "type": "main", "index": 0 }]] },
     "Horário Dentro do Expediente? (Remarcar)": {
       "main": [
-        [{ "node": "Verificar Disponibilidade para Remarcar", "type": "main", "index": 0 }],
+        [{ "node": "Listar Eventos no Novo Horário (Remarcar)", "type": "main", "index": 0 }],
         [{ "node": "Avisar Horário Fora do Expediente no WhatsApp", "type": "main", "index": 0 }]
       ]
     },
+    "Listar Eventos no Novo Horário (Remarcar)": { "main": [[{ "node": "Verificar Disponibilidade para Remarcar", "type": "main", "index": 0 }]] },
     "Verificar Disponibilidade para Remarcar": { "main": [[{ "node": "Novo Horário Disponível?", "type": "main", "index": 0 }]] },
     "Novo Horário Disponível?": {
       "main": [

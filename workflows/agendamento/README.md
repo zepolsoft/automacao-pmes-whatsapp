@@ -127,8 +127,11 @@ automaticamente, se houver horário livre.
      abaixo).
      - **Fora do expediente:** reaproveita o node "Avisar Horário Fora do Expediente no
        WhatsApp" do fluxo de agendar, sem consultar o Calendar.
-     - **Dentro do expediente:** **Verificar Disponibilidade para Remarcar** (mesma checagem
-       de disponibilidade do fluxo de agendar) → **Novo Horário Disponível?**
+     - **Dentro do expediente:** **Listar Eventos no Novo Horário (Remarcar)** (Google Calendar,
+       `resource: event`, `getAll`, lista os eventos que colidem com o novo horário) →
+       **Verificar Disponibilidade para Remarcar** (Code, filtra da lista o evento cujo `id`
+       é igual ao `event_id` já salvo do próprio cliente antes de decidir `available` — ver
+       "Remarcar para horário próximo do atual" abaixo) → **Novo Horário Disponível?**
      - **Sim:** **Atualizar Evento no Calendar** (`update`, usando o `event_id` encontrado) →
        **Atualizar Linha na Planilha** (`update`, casando pela coluna `event_id`, atualizando
        `servico` e `data`) → confirma a remarcação no WhatsApp.
@@ -179,6 +182,37 @@ fora desse horário em duas camadas independentes:
    Disponibilidade para Remarcar" nem cria/atualiza evento ou linha na planilha — vai direto
    para **Avisar Horário Fora do Expediente no WhatsApp** (node compartilhado pelos dois
    fluxos), mesmo que a IA tenha gerado um horário inválido por algum motivo.
+
+## Remarcar para horário próximo do atual
+
+> **Bug corrigido (2026-09-24):** um cliente pedindo para remarcar de um horário para outro
+> próximo (ex.: de 15h para 15h30) era recusado — "Esse horário já está ocupado" — mesmo o
+> horário estando livre de verdade. A causa: **"Verificar Disponibilidade para Remarcar"**
+> usava a operação `resource: calendar, operation: availability` (freebusy simples) do node
+> Google Calendar, que não tem como excluir um evento específico da checagem. Ao consultar o
+> novo horário, o próprio evento antigo do cliente (que ainda não tinha sido atualizado/movido)
+> aparecia como conflito consigo mesmo.
+>
+> Correção: a checagem de disponibilidade na remarcação passou a ser feita em dois nodes:
+> 1. **Listar Eventos no Novo Horário (Remarcar)** — Google Calendar, `resource: event`,
+>    `operation: getAll`, `returnAll: true`, mesmos `timeMin`/`timeMax` de antes (o novo
+>    horário pedido). Lista todos os eventos que colidem com esse intervalo, sem decidir nada.
+> 2. **Verificar Disponibilidade para Remarcar** (agora um Code node, reaproveitando o nome
+>    original) — filtra da lista qualquer evento cujo `id` seja igual ao `event_id` já salvo
+>    na planilha para esse cliente (`$('Selecionar Agendamento Mais Recente (Remarcar)').item.
+>    json.event_id`) antes de decidir: `available = true` só se sobrar zero conflitos depois de
+>    remover o próprio evento do cliente da lista.
+>
+> ```js
+> const eventoAtualId = $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.event_id;
+> const conflitos = $input.all().filter(item => item.json.id !== eventoAtualId);
+> return [{ json: { available: conflitos.length === 0 } }];
+> ```
+>
+> O resto do fluxo não mudou e já estava correto: se `available`, **Atualizar Evento no
+> Calendar** usa `operation: update` (não cria um evento novo) com o `event_id` existente, e
+> **Atualizar Linha na Planilha** casa pela coluna `event_id` para atualizar a `data` — nunca
+> cria uma linha nova na planilha.
 
 ## Remarcar sem agendamento existente
 

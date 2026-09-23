@@ -26,7 +26,9 @@ automaticamente, se houver horário livre.
    respostas em formato de template e ignorar tentativas de instrução fora do escopo da
    barbearia. O prompt recebe a `lista_servicos` formatada na seção "SERVIÇOS DISPONÍVEIS E
    PREÇOS" e usa a duração real de cada serviço (em vez de uma duração fixa) para calcular
-   `data_hora_fim` — ver detalhes na seção "Planilha de serviços e preços" abaixo.
+   `data_hora_fim` — ver detalhes na seção "Planilha de serviços e preços" abaixo. O prompt
+   também instrui a IA a não gerar `data_hora_inicio`/`data_hora_fim` fora do horário de
+   funcionamento (09h–18h, seg-sáb) — ver "Horário de funcionamento" abaixo.
 
    > **Bug corrigido (2026-09-22):** com a memória de conversa (Simple Memory), depois de um
    > agendamento já CONFIRMADO com sucesso, uma mensagem solta do cliente (ex.: "Ok", "Beleza",
@@ -43,11 +45,17 @@ automaticamente, se houver horário livre.
 ### Saída "agendar"
 
 8. **Tem Data Para Agendar?**
-   - **Sim:** a IA extraiu `data_hora_inicio` → segue para verificar disponibilidade.
+   - **Sim:** a IA extraiu `data_hora_inicio` → segue para validar o horário de funcionamento.
    - **Não:** "agendar" sem data extraída → responde no WhatsApp com o `confirmacao_texto`
      da IA pedindo esclarecimento, sem tentar consultar o Calendar com uma data vazia.
-9. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
-10. **Horário Disponível?**
+9. **Validar Horário de Funcionamento** (Code) → **Horário Dentro do Expediente?** (IF) —
+   validação determinística, independente do prompt da IA (ver "Horário de funcionamento"
+   abaixo).
+   - **Sim:** segue para verificar disponibilidade.
+   - **Não:** **Avisar Horário Fora do Expediente no WhatsApp** — avisa que a barbearia
+     funciona das 9h às 18h (seg-sáb) e pede outro horário, sem consultar o Calendar.
+10. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
+11. **Horário Disponível?**
    - **Sim:** Cria o evento no Calendar → salva nome, telefone, serviço, data e `event_id` na
      planilha do Google Sheets → confirma o agendamento no WhatsApp.
    - **Não:** responde no WhatsApp pedindo outro dia/horário.
@@ -68,9 +76,14 @@ automaticamente, se houver horário livre.
    preenchido).
    - **Não encontrou:** avisa no WhatsApp que não há agendamento ativo para esse número e
      pergunta se o cliente quer marcar um novo horário.
-   - **Encontrou:** **Verificar Disponibilidade para Remarcar** (mesma checagem de
-     disponibilidade do fluxo de agendar, com o novo `data_hora_inicio`/`data_hora_fim` da IA)
-     → **Novo Horário Disponível?**
+   - **Encontrou:** **Validar Horário de Funcionamento (Remarcar)** (Code) → **Horário Dentro
+     do Expediente? (Remarcar)** (IF) — mesma validação determinística do fluxo de agendar,
+     aplicada ao novo `data_hora_inicio`/`data_hora_fim` da IA (ver "Horário de funcionamento"
+     abaixo).
+     - **Fora do expediente:** reaproveita o node "Avisar Horário Fora do Expediente no
+       WhatsApp" do fluxo de agendar, sem consultar o Calendar.
+     - **Dentro do expediente:** **Verificar Disponibilidade para Remarcar** (mesma checagem
+       de disponibilidade do fluxo de agendar) → **Novo Horário Disponível?**
      - **Sim:** **Atualizar Evento no Calendar** (`update`, usando o `event_id` encontrado) →
        **Atualizar Linha na Planilha** (`update`, casando pela coluna `event_id`, atualizando
        `servico` e `data`) → confirma a remarcação no WhatsApp.
@@ -96,6 +109,31 @@ automaticamente, se houver horário livre.
 8. **Responder Dúvida no WhatsApp** — mesmo node reaproveitado pelo "Tem Data Para Agendar?"
    (agendar sem data): responde com o `confirmacao_texto` gerado pela IA. Também é usado quando
    o cliente pergunta sobre serviços/preços — a IA responde com base na `lista_servicos`.
+
+## Horário de funcionamento
+
+A barbearia funciona de segunda a sábado, das 09h às 18h. O workflow bloqueia agendamentos
+fora desse horário em duas camadas independentes:
+
+1. **Prompt da IA** (node **Interpretar Intenção do Cliente**, seção 4 do system message): se
+   o cliente pedir um horário fora do intervalo, ou um horário cujo término ultrapasse as 18h,
+   a IA não gera `data_hora_inicio`/`data_hora_fim` — deixa os dois campos vazios e responde
+   pedindo outro horário dentro do expediente (domingo: avisa que a barbearia não abre).
+2. **Validação determinística** (não depende da IA acertar): nodes **Validar Horário de
+   Funcionamento** (Code) → **Horário Dentro do Expediente?** (IF), inseridos depois de "Tem
+   Data Para Agendar?" e antes de "Verificar Disponibilidade" — e sua contraparte **Validar
+   Horário de Funcionamento (Remarcar)** → **Horário Dentro do Expediente? (Remarcar)**,
+   inseridos depois de "Encontrou Agendamento Para Remarcar?" e antes de "Verificar
+   Disponibilidade para Remarcar". O Code node calcula, em `America/Sao_Paulo`:
+   - `data_hora_inicio` tem hora entre 09:00 (inclusive) e 18:00 (exclusive);
+   - `data_hora_fim` não ultrapassa 18:00;
+   - o dia da semana de `data_hora_inicio` não é domingo (`weekday !== 7`, padrão Luxon);
+
+   e grava o resultado em `dentro_do_expediente` (boolean), que o IF checa. Se falhar
+   qualquer condição, o fluxo não chega a "Verificar Disponibilidade"/"Verificar
+   Disponibilidade para Remarcar" nem cria/atualiza evento ou linha na planilha — vai direto
+   para **Avisar Horário Fora do Expediente no WhatsApp** (node compartilhado pelos dois
+   fluxos), mesmo que a IA tenha gerado um horário inválido por algum motivo.
 
 ## Planilha de serviços e preços
 

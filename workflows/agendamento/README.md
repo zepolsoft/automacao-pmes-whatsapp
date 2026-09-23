@@ -28,7 +28,13 @@ automaticamente, se houver horário livre.
    PREÇOS" e usa a duração real de cada serviço (em vez de uma duração fixa) para calcular
    `data_hora_fim` — ver detalhes na seção "Planilha de serviços e preços" abaixo. O prompt
    também instrui a IA a não gerar `data_hora_inicio`/`data_hora_fim` fora do horário de
-   funcionamento (09h–18h, seg-sáb) — ver "Horário de funcionamento" abaixo.
+   funcionamento (09h–18h, seg-sáb) — ver "Horário de funcionamento" abaixo, e a nunca
+   classificar como `"duvida"` uma mensagem que pede um horário específico, nem gerar
+   linguagem de confirmação fora dos casos `"agendar"`/`"remarcar"` — ver "Nunca confirmar
+   sem checar disponibilidade" abaixo.
+7. **Corrigir Falsa Confirmação em Dúvida** (Code) — rede de segurança estrutural, independente
+   do prompt: roda entre "Interpretar Intenção do Cliente" e o Switch de intenção (ver "Nunca
+   confirmar sem checar disponibilidade" abaixo).
 
    > **Bug corrigido (2026-09-22):** com a memória de conversa (Simple Memory), depois de um
    > agendamento já CONFIRMADO com sucesso, uma mensagem solta do cliente (ex.: "Ok", "Beleza",
@@ -50,24 +56,24 @@ automaticamente, se houver horário livre.
    > funcionamento (item 4) também foi ajustada: antes ela forçava `intencao = "agendar"`
    > sempre que o horário pedido caía fora do expediente, o que podia sobrescrever um
    > `"remarcar"` legítimo; agora ela preserva a intencao já determinada pela regra crítica.
-7. **Qual a Intenção do Cliente?** — Switch com base em `intencao`, com 4 saídas:
+8. **Qual a Intenção do Cliente?** — Switch com base em `intencao`, com 4 saídas:
    `agendar`, `remarcar`, `cancelar` e o fallback `duvida` (qualquer outro valor, incluindo
    uma resposta inesperada da IA, cai nesse fallback e é tratado como dúvida).
 
 ### Saída "agendar"
 
-8. **Tem Data Para Agendar?**
+9. **Tem Data Para Agendar?**
    - **Sim:** a IA extraiu `data_hora_inicio` → segue para validar o horário de funcionamento.
    - **Não:** "agendar" sem data extraída → responde no WhatsApp com o `confirmacao_texto`
      da IA pedindo esclarecimento, sem tentar consultar o Calendar com uma data vazia.
-9. **Validar Horário de Funcionamento** (Code) → **Horário Dentro do Expediente?** (IF) —
+10. **Validar Horário de Funcionamento** (Code) → **Horário Dentro do Expediente?** (IF) —
    validação determinística, independente do prompt da IA (ver "Horário de funcionamento"
    abaixo).
    - **Sim:** segue para verificar disponibilidade.
    - **Não:** **Avisar Horário Fora do Expediente no WhatsApp** — avisa que a barbearia
      funciona das 9h às 18h (seg-sáb) e pede outro horário, sem consultar o Calendar.
-10. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
-11. **Horário Disponível?**
+11. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
+12. **Horário Disponível?**
    - **Sim:** Cria o evento no Calendar → salva nome, telefone, serviço, data e `event_id` na
      planilha do Google Sheets → confirma o agendamento no WhatsApp.
    - **Não:** responde no WhatsApp pedindo outro dia/horário.
@@ -81,7 +87,7 @@ automaticamente, se houver horário livre.
 
 ### Saída "remarcar"
 
-8. **Buscar Agendamento para Remarcar** — Google Sheets (`read`, com filtro por `telefone`,
+9. **Buscar Agendamento para Remarcar** — Google Sheets (`read`, com filtro por `telefone`,
    retornando todas as linhas que baterem) → **Selecionar Agendamento Mais Recente (Remarcar)**
    (node Limit, mantém só a última linha, assumindo que a planilha é preenchida em ordem
    cronológica) → **Encontrou Agendamento Para Remarcar?** (IF checando se `event_id` veio
@@ -109,7 +115,7 @@ automaticamente, se houver horário livre.
 
 ### Saída "cancelar"
 
-8. **Buscar Agendamento para Cancelar** / **Selecionar Agendamento Mais Recente (Cancelar)** /
+9. **Buscar Agendamento para Cancelar** / **Selecionar Agendamento Mais Recente (Cancelar)** /
    **Encontrou Agendamento Para Cancelar?** — mesma lógica de busca do fluxo de remarcar.
    - **Não encontrou:** reaproveita o node que avisa que não há agendamento ativo.
    - **Encontrou:** **Cancelar Evento no Calendar** (`delete`, usando o `event_id`) →
@@ -118,7 +124,7 @@ automaticamente, se houver horário livre.
 
 ### Saída "duvida" (fallback)
 
-8. **Responder Dúvida no WhatsApp** — mesmo node reaproveitado pelo "Tem Data Para Agendar?"
+9. **Responder Dúvida no WhatsApp** — mesmo node reaproveitado pelo "Tem Data Para Agendar?"
    (agendar sem data): responde com o `confirmacao_texto` gerado pela IA. Também é usado quando
    o cliente pergunta sobre serviços/preços — a IA responde com base na `lista_servicos`.
 
@@ -146,6 +152,46 @@ fora desse horário em duas camadas independentes:
    Disponibilidade para Remarcar" nem cria/atualiza evento ou linha na planilha — vai direto
    para **Avisar Horário Fora do Expediente no WhatsApp** (node compartilhado pelos dois
    fluxos), mesmo que a IA tenha gerado um horário inválido por algum motivo.
+
+## Nunca confirmar sem checar disponibilidade
+
+> **Bug corrigido (2026-09-23, crítico):** o cliente perguntou "Tem horário amanhã às 14h?" e o
+> agente respondeu confirmando o horário — sem nunca checar o Google Calendar nem criar
+> evento algum. Investigando a execução (nº 377): o node **Interpretar Intenção do Cliente**
+> classificou a mensagem como `intencao = "duvida"`, com `data_hora_inicio`/`data_hora_fim`
+> vazios e `confirmacao_texto = "Sim, José! Seu corte já está confirmado para amanhã às 14h.
+> Até lá! 💈"`. O Switch "Qual a Intenção do Cliente?" caiu no fallback `duvida` e mandou essa
+> mensagem direto pelo node **Responder Dúvida no WhatsApp** — que nunca passa por "Verificar
+> Disponibilidade" nem "Criar Evento no Calendar". O horário perguntado já estava ocupado por
+> outra cliente na agenda real; o sistema "confirmou" um agendamento que nunca existiu.
+
+Correção em duas camadas:
+
+1. **Prompt da IA** (node **Interpretar Intenção do Cliente**, seção REGRAS GERAIS): nova regra
+   em destaque — qualquer mensagem que mencione uma data/horário específico junto de um pedido
+   ou pergunta de disponibilidade (mesmo fraseada como pergunta: "tem horário amanhã às 14h?",
+   "dá pra marcar sexta às 10h?") deve ser classificada como `"agendar"` (ou `"remarcar"`, se já
+   houver confirmação anterior na conversa) — nunca `"duvida"`. `"duvida"` fica reservada para
+   perguntas sem data/horário específico. A IA também é proibida de gerar `confirmacao_texto`
+   com linguagem de confirmação ("confirmado", "marcado", "reservado", "agendado") fora dos
+   casos `"agendar"`/`"remarcar"`.
+2. **Proteção estrutural** (não depende da IA seguir a regra): node **Corrigir Falsa
+   Confirmação em Dúvida** (Code), inserido logo depois de "Interpretar Intenção do Cliente" e
+   antes do Switch "Qual a Intenção do Cliente?" — ou seja, toda saída da IA passa por ele antes
+   de ser roteada. Ele verifica, com uma regex case-insensitive
+   (`/confirmad[oa]|marcad[oa]|reservad[oa]|agendad[oa]/i`), se `intencao === "duvida"` e o
+   `confirmacao_texto` contém linguagem de confirmação:
+   - Se a IA **extraiu** `data_hora_inicio` (mesmo classificando errado como `"duvida"`):
+     sobrescreve `intencao` para `"agendar"`, redirecionando o item para o fluxo real de
+     agendamento — que passa por "Validar Horário de Funcionamento" e "Verificar
+     Disponibilidade" de verdade antes de confirmar qualquer coisa.
+   - Se **não há** `data_hora_inicio` (como no caso do bug — a IA não tinha extraído nenhuma
+     data): substitui o `confirmacao_texto` por um pedido seguro de esclarecimento ("Pode me
+     confirmar o dia e o horário exatos..."), sem deixar uma falsa confirmação sair pelo
+     WhatsApp.
+
+   Assim, nenhuma mensagem de confirmação chega ao cliente sem que o fluxo tenha efetivamente
+   passado (ou vá passar) por uma checagem real de disponibilidade no Calendar.
 
 ## Planilha de serviços e preços
 

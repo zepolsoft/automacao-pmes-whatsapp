@@ -5,6 +5,98 @@ Workflow n8n: [`lembrete-cancelamento.json`](./lembrete-cancelamento.json) · [a
 Todo dia às 8h, avisa cada cliente com horário marcado para o dia atual e trata a resposta
 dele: confirmar, cancelar ou remarcar.
 
+## Objetivo e o que este workflow NÃO faz
+
+**Faz:** roda o ciclo diário do lembrete — dispara às 8h para todo agendamento do dia,
+aguarda a resposta do cliente a ESSE lembrete específico, classifica em confirmar/cancelar/
+remarcar, efetiva a ação (Calendar + planilha) e responde. Também roda, num trigger
+independente às 22h, a rotina que marca atendimentos passados como "concluído".
+
+**NÃO faz:**
+- Não recebe nem processa mensagens espontâneas do cliente fora do contexto de um lembrete já
+  enviado por este workflow — isso é o outro workflow,
+  **[Agendamento via WhatsApp](../agendamento/README.md)**.
+- Não cria agendamentos novos do zero (só remarca um agendamento existente para outro
+  horário).
+- Não interpreta livremente o que o cliente quer dizer fora das três opções (confirmar,
+  cancelar, remarcar) — uma resposta fora desse escopo cai em `decisao = "indefinido"` e só
+  pede esclarecimento, nunca tenta adivinhar uma intenção mais ampla como o outro workflow faz.
+
+## Principais nodes e papel de cada um
+
+| Node | Papel |
+|---|---|
+| Disparar Lembrete Diário às 8h | Schedule Trigger do ciclo principal |
+| Buscar Agendamentos de Hoje (Planilha) / Filtrar Data de Hoje | Lê a planilha inteira e filtra só os agendamentos de hoje com status `agendado`/`remarcado` |
+| Processar Cada Agendamento | Loop (Split in Batches) — processa um cliente por vez |
+| Enviar Lembrete no WhatsApp | Envia o lembrete e pergunta confirmar/cancelar/remarcar |
+| Aguardar Resposta do Cliente | Wait node (webhook), com timeout de 10 min |
+| Cliente Respondeu ou Deu Timeout? | Diferencia resposta real de timeout |
+| Reverificar Agendamento Antes do Timeout / Agendamento Ainda É o Mesmo? | Antes de avisar timeout, confere se o agendamento mudou por outro caminho enquanto esperava |
+| Normalizar Resposta do Lembrete | Extrai texto da resposta e `message_id` do payload |
+| Checar Mensagem Duplicada / Mensagem Já Processada? / Registrar Mensagem Processada | Deduplicação por `message_id` (ver "Regras de negócio" abaixo) |
+| Checar Lock do Telefone / Telefone Ocupado? / Registrar Lock do Telefone | Lock de 30s por telefone, evita execuções paralelas do mesmo cliente |
+| Classificar Resposta do Lembrete | AI Agent (Claude) — classifica confirmar/cancelar/remarcar/indefinido e escreve `confirmacao_texto` |
+| Confirmar, Cancelar ou Remarcar? | Switch que roteia a decisão |
+| Validar Horário de Funcionamento / Horário Dentro do Expediente? | Code determinístico: rejeita novo horário fora de 9h-18h (seg-sáb) ou já passado, na remarcação |
+| Verificar Novo Horário Disponível / Novo Horário Disponível? | Checagem real no Google Calendar do novo horário pedido |
+| Atualizar Evento no Calendar / Cancelar Evento no Calendar | Efetiva a ação no Calendar |
+| Atualizar Data na Planilha / Atualizar Status na Planilha (Cancelar) | Grava o resultado na planilha "Clientes - Automação PMEs" |
+| Enviar Confirmação Final / de Cancelamento / de Remarcação / Pedir Outro Horário / Avisar Horário Fora do Expediente / Pedir Esclarecimento / Avisar Timeout no WhatsApp | Respostas ao cliente (ver "Sincronização de tom" abaixo) |
+| Marcar Atendimentos Concluídos às 22h (+ Buscar Todos / Filtrar Passados Pendentes / Marcar Como Concluído) | Segundo trigger, independente do ciclo do lembrete |
+
+## Colunas da planilha "Clientes - Automação PMEs"
+
+| coluna | lê? | escreve? | quando |
+|---|---|---|---|
+| `nome`, `telefone`, `servico` | lê (usados direto do item da planilha, sem lookup extra) | escreve `servico`/`preco`/`criado_em` de volta sem alterar | em toda remarcação/cancelamento/conclusão, reescritos com o valor que já estava (ver bug do range do Update Row, abaixo) |
+| `data` | lê (para o lembrete de hoje e para checar se o agendamento mudou antes do timeout) | escreve | remarcação sobrescreve com a nova data |
+| `event_id` | lê (chave de correspondência em toda escrita) | — | nunca escrito por este workflow (só lido) |
+| `status` | lê (filtro do lembrete diário e da rotina das 22h) | escreve | `remarcado` na remarcação, `cancelado` no cancelamento, `concluido` na rotina das 22h |
+| `preco`, `criado_em` | lê (para reescrever sem alterar) | escreve (reescrita, não recálculo) | em toda remarcação/cancelamento/conclusão |
+| `atualizado_em` | — | escreve | em toda remarcação/cancelamento/conclusão |
+
+## Regras de negócio implementadas
+
+- **Horário de funcionamento** (segunda a sábado, 9h-18h) na remarcação — ver "Horário de
+  funcionamento na remarcação" abaixo.
+- **Validação de data no passado** — mesmo Code node acima, condição `jaPassou`.
+- **Deduplicação de mensagens** por `message_id` (wamid) — ver "Robustez: deduplicação, lock
+  por telefone e data no passado" abaixo.
+- **Lock por telefone** (30s) — evita duas execuções paralelas do mesmo cliente, mesma seção.
+- **Timeout de espera** (10 min) com reverificação antes de avisar — ver "Timeout de espera no
+  lembrete" abaixo.
+
+## Sincronização de tom com o workflow de agendamento
+
+Este workflow e o **[Agendamento via WhatsApp](../agendamento/README.md)** atendem o mesmo
+número de WhatsApp da barbearia, então, do ponto de vista do cliente, é uma conversa só — ele
+não deve perceber que está "falando com duas IAs diferentes" dependendo de ter sido ele quem
+escreveu primeiro ou o negócio quem mandou um lembrete. Por isso os dois workflows
+compartilham deliberadamente:
+
+- O mesmo campo de saída da IA, `confirmacao_texto`, com as mesmas instruções de **variedade e
+  tom** no system message (não repetir a mesma estrutura/abertura de frase, usar o nome do
+  cliente sem exagero, ser acolhedor em remarcação de última hora) — ver o system message de
+  "Classificar Resposta do Lembrete" aqui e de "Interpretar Intenção do Cliente" no outro
+  workflow.
+- O mesmo texto-base (com variações sorteadas) para as situações que não passam pela IA:
+  horário ocupado, fora do expediente, "não entendi".
+- As mesmas regras de horário de funcionamento e validação de data no passado.
+
+Apesar do tom compartilhado, os dois workflows têm **escopo e lógica totalmente
+independentes** — não compartilham nenhum node, trigger, nem estado de execução:
+
+- Este workflow trata especificamente o ciclo do lembrete diário: dispara às 8h, aguarda
+  resposta a UM lembrete específico já enviado, e tem sua própria lógica de timeout — nunca
+  reage a uma mensagem espontânea do cliente que não seja resposta a esse lembrete.
+- O outro trata mensagens recebidas a qualquer momento, iniciadas pelo cliente.
+
+Uma mudança de tom/estilo num dos dois (ex.: ajustar a seção VARIEDADE E TOM do prompt) deve,
+na prática, ser replicada no outro para manter a experiência consistente — não existe hoje um
+prompt compartilhado entre os dois workflows (cada AI Agent tem seu próprio system message),
+então essa sincronização é manual e intencional, não automática.
+
 ## Fluxo
 
 1. **Disparar Lembrete Diário às 8h** — Schedule Trigger.

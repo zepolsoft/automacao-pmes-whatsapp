@@ -61,7 +61,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $json.telefone.toString() }}",
-        "textBody": "=Oi {{ $json.nome }}! Passando para lembrar do seu horário de {{ $json.servico }} hoje às {{ $json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($json.data).setZone('America/Sao_Paulo')) : '' }}. Você confirma, quer cancelar ou prefere remarcar?",
+        "textBody": "={{ (() => { const nome = $json.nome || ''; const horario = $json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($json.data).setZone('America/Sao_Paulo')) : ''; const opcoes = [ `Oi ${nome}! Passando para lembrar do seu horário de ${$json.servico} hoje às ${horario}. Você confirma, quer cancelar ou prefere remarcar?`, `Oi ${nome}, tudo bem? Só passando pra confirmar seu horário de ${$json.servico} hoje às ${horario}. Fica confirmado, ou prefere cancelar/remarcar?`, `${nome}, lembrando do seu ${$json.servico} hoje às ${horario}! Confirma pra gente, ou precisa cancelar/remarcar?` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
     },
@@ -141,7 +141,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
-        "textBody": "=Oi {{ $('Processar Cada Agendamento').item.json.nome }}! Não recebi resposta sobre o lembrete do seu horário de {{ $('Processar Cada Agendamento').item.json.servico }} hoje às {{ $('Processar Cada Agendamento').item.json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Processar Cada Agendamento').item.json.data).setZone('America/Sao_Paulo')) : '' }}. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊",
+        "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const servico = $('Processar Cada Agendamento').item.json.servico; const horario = $('Processar Cada Agendamento').item.json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Processar Cada Agendamento').item.json.data).setZone('America/Sao_Paulo')) : ''; const opcoes = [ `Oi ${nome}! Não recebi resposta sobre o lembrete do seu horário de ${servico} hoje às ${horario}. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊`, `${nome}, não vi sua resposta por aqui, mas deixei seu horário de ${servico} hoje às ${horario} como estava. Qualquer mudança, é só falar comigo!`, `Oi ${nome}, tudo certo? Como não recebi retorno, mantive seu ${servico} de hoje às ${horario} confirmado. Pode me chamar se precisar mudar algo 😊` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
     },
@@ -171,10 +171,10 @@
       "position": [1872, 80],
       "parameters": {
         "promptType": "define",
-        "text": "=Data e hora atuais: {{ $now.toISO() }}\nResposta do cliente ao lembrete: {{ $json.resposta_cliente }}",
+        "text": "=Nome do cliente: {{ $('Processar Cada Agendamento').item.json.nome }}\nServiço agendado: {{ $('Processar Cada Agendamento').item.json.servico }}\nData e hora atuais: {{ $now.toISO() }}\nData e hora do agendamento atual: {{ $('Processar Cada Agendamento').item.json.data }}\nResposta do cliente ao lembrete: {{ $json.resposta_cliente }}",
         "hasOutputParser": true,
         "options": {
-          "systemMessage": "Você classifica a resposta de um cliente a um lembrete de agendamento de um pequeno negócio local em uma de três categorias: \"confirmar\" (o cliente confirmou o horário), \"cancelar\" (o cliente não vai mais) ou \"remarcar\" (o cliente quer outro dia/horário). Se a resposta do cliente for apenas um emoji (ou combinação de emojis) sem texto, ou uma expressão curta de agradecimento/confirmação (ex: \"ok\", \"blz\", \"obrigado\", \"👍\", \"🙏\") — normalmente o cliente só está reconhecendo a mensagem, sem pedir cancelamento ou remarcação —, trate como confirmação implícita do agendamento: decisao = \"confirmar\". Gere um resposta_sugerida curto e natural para esse caso (ex: \"Combinado! Te espero 😊\"), nunca a frase de resposta não reconhecida. decisao = \"indefinido\" fica reservada só para respostas realmente ambíguas ou que não indicam confirmar/cancelar/remarcar de forma alguma — nunca para reações curtas como essas. Se o cliente quiser remarcar e sugerir um novo dia/horário, converta para data e hora absolutas em ISO 8601, usando a data e hora atuais informadas como referência, assumindo 1 hora de duração. Gere também um texto curto com a nova data e horário por extenso em português, para usar na resposta ao cliente. Se não for possível classificar com clareza, responda decisao como \"indefinido\"."
+          "systemMessage": "Você classifica a resposta de um cliente a um lembrete de agendamento de uma barbearia em uma de quatro categorias:\n- \"confirmar\" — o cliente confirmou o horário\n- \"cancelar\" — o cliente não vai mais\n- \"remarcar\" — o cliente quer outro dia/horário\n- \"indefinido\" — resposta realmente ambígua ou que não indica nenhuma das anteriores\n\nREGRAS DE CLASSIFICAÇÃO (não mude esta lógica, só a redação da resposta ao cliente):\n- Se a resposta do cliente for apenas um emoji (ou combinação de emojis) sem texto, ou uma expressão curta de agradecimento/confirmação (ex: \"ok\", \"blz\", \"obrigado\", \"👍\", \"🙏\") — normalmente o cliente só está reconhecendo a mensagem, sem pedir cancelamento ou remarcação — trate como confirmação implícita do agendamento: decisao = \"confirmar\".\n- decisao = \"indefinido\" fica reservada só para respostas realmente ambíguas ou que não indicam confirmar/cancelar/remarcar de forma alguma — nunca para reações curtas como essas.\n- Se o cliente quiser remarcar e sugerir um novo dia/horário, converta para data e hora absolutas em ISO 8601 (novo_horario_inicio/novo_horario_fim), usando a data e hora atuais informadas como referência, assumindo 1 hora de duração.\n\nCONFIRMACAO_TEXTO — mensagem curta, natural e cordial em português para enviar ao cliente, como se um atendente de verdade estivesse digitando no WhatsApp. Escreva como uma frase corrida e espontânea, nunca como um formulário preenchido ou template com lacunas.\n\nVARIEDADE E TOM (vale para toda confirmacao_texto, em qualquer decisao):\n- Nunca repita a mesma estrutura de frase, a mesma palavra de abertura (\"Perfeito\", \"Combinado\", \"Prontinho\", \"Tudo bem\") ou a mesma ordem de informações em mensagens seguidas — varie a forma de começar e de organizar a frase a cada resposta, como uma pessoa de verdade escreveria. Os exemplos abaixo mostram só o formato esperado — nunca copie o texto deles literalmente.\n- Use o nome do cliente de forma natural, mas não é obrigatório em toda mensagem — um atendente de verdade não repete o nome do outro em cada frase. Priorize usar o nome ao confirmar algo importante ou ao acolher o cliente numa remarcação de última hora.\n- Seja especialmente acolhedor quando o cliente pede para remarcar em cima da hora (pouco tempo antes do horário já agendado) — reconheça a situação com empatia antes de confirmar, em vez de responder de forma seca.\n\nRegras por decisao:\n- decisao = \"confirmar\": confirme de forma calorosa e breve que o horário está garantido. Exemplos (varie entre estilos assim): \"Perfeito, te espero por aqui!\" / \"Combinado, {{ nome }}! Até já.\" / \"Show, contando com você!\" — inclusive quando a confirmação veio de um emoji ou \"ok\" (ex: \"Por nada, até lá! 😊\", \"Fico à disposição!\").\n- decisao = \"cancelar\": confirme o cancelamento de forma gentil, sem soar burocrático, e deixe claro que o cliente pode remarcar quando quiser. Exemplos: \"Tudo bem, cancelei aqui pra você. Quando quiser remarcar é só chamar!\" / \"Combinado, seu horário foi cancelado sem problema. Te espero quando quiser voltar.\"\n- decisao = \"remarcar\" e um novo horário foi identificado: escreva uma frase curta e natural confirmando o novo dia/horário por extenso em português (ex: \"quinta-feira, dia 19 de setembro, às 10h\"), incorporado numa frase fluida, não como um valor solto. Se o pedido for de última hora, reconheça isso com empatia antes de confirmar (ex.: \"Sem problema, dá tempo sim! Já ficou pra...\" em vez de só cravar a nova data/hora seca). Este texto só é enviado se o novo horário realmente estiver disponível — escreva como se fosse a confirmação final.\n- decisao = \"indefinido\": não gere confirmacao_texto de confirmação — este caso não usa o campo (a pergunta de esclarecimento ao cliente já é tratada por outro node do fluxo).\n\nSe não for possível classificar com clareza, responda decisao como \"indefinido\"."
         }
       },
       "onError": "continueRegularOutput"
@@ -205,7 +205,7 @@
       "typeVersion": 1.3,
       "position": [2072, 296],
       "parameters": {
-        "jsonSchemaExample": "{ \"decisao\": \"confirmar\", \"novo_horario_inicio\": \"2026-09-19T10:00:00\", \"novo_horario_fim\": \"2026-09-19T11:00:00\", \"resposta_sugerida\": \"sexta-feira, dia 19 de setembro, às 10h\" }"
+        "jsonSchemaExample": "{ \"decisao\": \"confirmar\", \"novo_horario_inicio\": \"2026-09-19T10:00:00\", \"novo_horario_fim\": \"2026-09-19T11:00:00\", \"confirmacao_texto\": \"Combinado! Fica pra sexta-feira, dia 19 de setembro, às 10h. Até lá! 😊\" }"
       }
     },
     {
@@ -238,7 +238,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
-        "textBody": "=Perfeito, {{ $('Processar Cada Agendamento').item.json.nome }}! Seu horário está confirmado. Até lá! 😊",
+        "textBody": "={{ $('Classificar Resposta do Lembrete').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
     },
@@ -307,7 +307,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
-        "textBody": "=Tudo bem, {{ $('Processar Cada Agendamento').item.json.nome }}! Seu horário foi cancelado. Quando quiser remarcar é só chamar por aqui. 😊",
+        "textBody": "={{ $('Classificar Resposta do Lembrete').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
     },
@@ -352,7 +352,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
-        "textBody": "=Esse horário já passou ou está fora do nosso expediente (funcionamos de segunda a sábado, das 9h às 18h). Pode me dizer outro dia ou horário, por favor? 🙂",
+        "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const opcoes = [ (nome ? `${nome}, esse` : `Esse`) + ` horário já passou ou está fora do nosso expediente (funcionamos de segunda a sábado, das 9h às 18h). Pode me dizer outro dia ou horário?`, `Esse horário não rola` + (nome ? `, ${nome}` : '') + ` — nosso expediente é de segunda a sábado, 9h às 18h. Qual outro horário funciona pra você?`, `Ops, estamos fechados nesse horário (atendemos seg-sáb, 9h às 18h)` + (nome ? `, ${nome}` : '') + `. Me diz outro dia ou horário que já verifico!` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
     },
@@ -453,7 +453,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
-        "textBody": "=Prontinho, {{ $('Processar Cada Agendamento').item.json.nome }}! Seu horário foi remarcado para {{ $('Classificar Resposta do Lembrete').item.json.output.resposta_sugerida }}. Até lá! 😊",
+        "textBody": "={{ $('Classificar Resposta do Lembrete').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
     },
@@ -469,7 +469,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
-        "textBody": "Esse novo horário já está ocupado. Pode me sugerir outro dia ou horário?",
+        "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const opcoes = [ (nome ? `Poxa, ${nome}, esse` : `Esse`) + ` novo horário já está ocupado! Pode me sugerir outro dia ou horário?`, `Ih, esse horário já foi preenchido` + (nome ? `, ${nome}` : '') + `! Tem outro dia ou horário em mente?`, (nome ? `${nome}, esse` : `Esse`) + ` horário não está mais livre. Qual outro você prefere?` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
     },
@@ -485,7 +485,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
-        "textBody": "Desculpa, não entendi sua resposta. Você quer confirmar, cancelar ou remarcar o horário?",
+        "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const opcoes = [ `Desculpa` + (nome ? `, ${nome}` : '') + `, não entendi bem. Você quer confirmar, cancelar ou remarcar o horário?`, `Não peguei direito` + (nome ? `, ${nome}` : '') + `! Confirma, cancela ou prefere remarcar?`, `Só pra eu confirmar` + (nome ? `, ${nome}` : '') + `: você quer manter o horário, cancelar ou remarcar?` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
     },
@@ -728,6 +728,19 @@
             { "id": "bloqueado_em", "displayName": "bloqueado_em", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "canBeUsedToMatch": false }
           ]
         }
+      }
+    },
+    {
+      "id": "e1d6f8b2-5b2c-4b2c-9d3e-b2c3d4e5f6a7",
+      "name": "Sticky Note README",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-48, -420],
+      "parameters": {
+        "width": 660,
+        "height": 420,
+        "color": 2,
+        "content": "## README — Lembrete, Cancelamento e Remarcação\n\n**Faz:** todo dia às 8h, avisa cada cliente com horário marcado para hoje, aguarda a\nresposta a ESSE lembrete e trata confirmar/cancelar/remarcar. Trigger separado às 22h marca\natendimentos passados como concluídos.\n\n**NÃO faz:** não recebe nem interpreta mensagens espontâneas do cliente fora do contexto de\num lembrete já enviado, não cria agendamentos novos do zero — isso é o workflow\n\"Agendamento via WhatsApp\".\n\n**Colunas da planilha:** lê nome/telefone/servico/data/event_id/status; escreve\nstatus/atualizado_em (remarcado/cancelado/concluido) e data (na remarcação) —\npreco/criado_em só são reescritos com o valor já existente, nunca alterados.\n\n**Regras de negócio:** horário de funcionamento na remarcação (seg-sáb, 9h-18h), data no\npassado, dedup de mensagem por message_id, lock de 30s por telefone, timeout de 10min com\nreverificação antes de avisar.\n\n**Tom compartilhado com o outro workflow:** confirmacao_texto segue as mesmas instruções de\nvariedade/acolhimento nos dois — mas a lógica e o escopo dos dois workflows são independentes.\n\nDocumentação completa: workflows/lembrete-cancelamento/README.md no repo."
       }
     }
   ],

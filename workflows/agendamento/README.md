@@ -5,6 +5,102 @@ Workflow n8n: [`agendamento.json`](./agendamento.json) · [abrir na instância](
 Recebe a mensagem de um cliente no WhatsApp, usa IA para entender o que ele quer e agenda
 automaticamente, se houver horário livre.
 
+## Objetivo e o que este workflow NÃO faz
+
+**Faz:** processa qualquer mensagem recebida no WhatsApp da barbearia, a qualquer momento do
+dia — interpreta a intenção (agendar, remarcar, cancelar, dúvida), verifica disponibilidade
+real no Google Calendar, cria/atualiza/cancela o evento, grava o resultado na planilha
+"Clientes - Automação PMEs" e responde o cliente na mesma conversa.
+
+**NÃO faz:**
+- Não dispara lembretes automáticos antes de um horário marcado — isso é o outro workflow,
+  **[Lembrete, Cancelamento e Remarcação](../lembrete-cancelamento/README.md)**.
+- Não processa a resposta do cliente a um lembrete diário (confirmar/cancelar/remarcar em cima
+  de um lembrete já enviado) — mesmo que a mensagem chegue pelo mesmo número de WhatsApp, é o
+  outro workflow que trata essa conversa específica (ver "Sincronização de tom" abaixo para
+  como os dois convivem no mesmo número sem o cliente perceber a diferença).
+- Não marca atendimentos como "concluído" depois que o horário passa — essa rotina roda só no
+  outro workflow (schedule diário às 22h).
+
+## Principais nodes e papel de cada um
+
+| Node | Papel |
+|---|---|
+| Receber Mensagem WhatsApp | Trigger (webhook do WhatsApp Business Cloud) |
+| Filtrar Apenas Mensagens | Descarta eventos de status (entrega/leitura), só deixa passar mensagens de texto reais |
+| Normalizar Dados da Mensagem | Extrai telefone, nome, texto e `message_id` do payload |
+| Checar Mensagem Duplicada / Mensagem Já Processada? / Registrar Mensagem Processada | Deduplicação por `message_id` (ver "Regras de negócio" abaixo) |
+| Checar Lock do Telefone / Telefone Ocupado? / Registrar Lock do Telefone | Lock de 30s por telefone, evita execuções paralelas do mesmo cliente |
+| Buscar Serviços e Preços / Formatar Lista de Serviços | Lê a planilha de serviços e monta o texto injetado no prompt da IA |
+| Interpretar Intenção do Cliente | AI Agent (Claude) — classifica intenção, extrai serviço/data/hora e escreve `confirmacao_texto` |
+| Corrigir Falsa Confirmação em Dúvida | Rede de segurança: impede a IA de "confirmar" algo sem checar disponibilidade de verdade |
+| Qual a Intenção do Cliente? | Switch que roteia para agendar / remarcar / cancelar / dúvida |
+| Validar Horário de Funcionamento (+ Remarcar) | Code determinístico: rejeita horário fora de 9h-18h (seg-sáb) ou já passado |
+| Verificar Disponibilidade / Listar Eventos no Novo Horário (Remarcar) + Verificar Disponibilidade para Remarcar | Checagem real no Google Calendar (a de remarcar exclui o próprio evento do cliente da lista de conflitos) |
+| Criar Evento no Calendar / Atualizar Evento no Calendar / Cancelar Evento no Calendar | Efetiva a ação no Calendar |
+| Salvar Cliente na Planilha / Atualizar Linha na Planilha / Atualizar Linha na Planilha (Cancelar) | Grava o resultado na planilha "Clientes - Automação PMEs" |
+| Confirmar Agendamento / Confirmar Remarcação / Confirmar Cancelamento / Responder Dúvida / Sugerir Outro Horário / Avisar Horário Fora do Expediente / Avisar Sem Agendamento Ativo no WhatsApp | Respostas ao cliente (ver "Sincronização de tom" abaixo sobre como são escritas) |
+
+## Colunas da planilha "Clientes - Automação PMEs"
+
+| coluna | lê? | escreve? | quando |
+|---|---|---|---|
+| `nome`, `telefone`, `servico` | lê (remarcar/cancelar, para achar a linha e reaproveitar dados) | escreve (na criação) | criação grava os três; remarcar/cancelar reescrevem `servico`/`preco`/`criado_em` com o valor que já estava, sem alterar |
+| `data` | lê (remarcar, para achar o agendamento mais recente) | escreve | criação grava a data escolhida; remarcação sobrescreve com a nova data |
+| `event_id` | lê (remarcar/cancelar, para achar a linha e o evento no Calendar) | escreve | gravado na criação, nunca muda depois |
+| `status` | lê (indiretamente, via `event_id`/`data` para achar a linha certa) | escreve | `agendado` na criação, `remarcado` na remarcação, `cancelado` no cancelamento |
+| `preco` | lê (remarcar/cancelar, para reescrever sem alterar) | escreve | calculado 1x na criação (lookup na planilha de serviços); nunca recalculado depois |
+| `criado_em` | lê (remarcar/cancelar, para reescrever sem alterar) | escreve | gravado 1x na criação, nunca muda depois |
+| `atualizado_em` | — | escreve | em toda remarcação/cancelamento |
+
+Detalhes de cada bug já corrigido nessas colunas (inclusive o bug do range do Update Row) estão
+na seção "Colunas de status e preço na planilha" mais abaixo.
+
+## Regras de negócio implementadas
+
+- **Horário de funcionamento** (segunda a sábado, 9h-18h) — ver seção "Horário de
+  funcionamento" abaixo.
+- **Validação de data no passado** — um horário dentro do expediente mas já passado hoje é
+  tratado como inválido, mesma seção acima (`jaPassou`).
+- **Deduplicação de mensagens** por `message_id` (wamid) — ver "Robustez: deduplicação, lock
+  por telefone e data no passado" abaixo.
+- **Lock por telefone** (30s) — evita duas execuções paralelas do mesmo cliente, mesma seção.
+- **Nunca confirmar sem checar disponibilidade real** — ver seção dedicada abaixo.
+- **Agendar vs. remarcar vs. cancelar** distinguidos por regra explícita no prompt da IA — ver
+  "REGRA CRÍTICA — AGENDAR VS REMARCAR" no system message do node "Interpretar Intenção do
+  Cliente".
+
+## Sincronização de tom com o workflow de lembrete
+
+Este workflow e o **[Lembrete, Cancelamento e Remarcação](../lembrete-cancelamento/README.md)**
+atendem o mesmo número de WhatsApp da barbearia, então, do ponto de vista do cliente, é uma
+conversa só — ele não deve perceber que está "falando com duas IAs diferentes" dependendo de
+ter sido ele quem escreveu primeiro ou o negócio quem mandou um lembrete. Por isso os dois
+workflows compartilham deliberadamente:
+
+- O mesmo campo de saída da IA, `confirmacao_texto`, com as mesmas instruções de **variedade e
+  tom** no system message (não repetir a mesma estrutura/abertura de frase, usar o nome do
+  cliente sem exagero, ser acolhedor em recusa/atraso/remarcação de última hora) — ver o
+  system message de "Interpretar Intenção do Cliente" aqui e de "Classificar Resposta do
+  Lembrete" no outro workflow.
+- O mesmo texto-base (com variações sorteadas) para as situações que não passam pela IA:
+  horário ocupado, fora do expediente, "não entendi".
+- As mesmas regras de horário de funcionamento e validação de data no passado.
+
+Apesar do tom compartilhado, os dois workflows têm **escopo e lógica totalmente
+independentes** — não compartilham nenhum node, trigger, nem estado de execução:
+
+- Este workflow trata mensagens recebidas a qualquer momento, iniciadas pelo cliente (ou em
+  resposta a uma mensagem anterior dele mesmo).
+- O outro trata especificamente o ciclo do lembrete diário: dispara às 8h, aguarda resposta a
+  UM lembrete específico já enviado, e tem sua própria lógica de timeout — nunca reage a uma
+  mensagem espontânea do cliente que não seja resposta a esse lembrete.
+
+Uma mudança de tom/estilo num dos dois (ex.: ajustar a seção VARIEDADE E TOM do prompt) deve,
+na prática, ser replicada no outro para manter a experiência consistente — não existe hoje um
+prompt compartilhado entre os dois workflows (cada AI Agent tem seu próprio system message),
+então essa sincronização é manual e intencional, não automática.
+
 ## Fluxo
 
 1. **Receber Mensagem WhatsApp** — trigger do WhatsApp Business Cloud (Meta Cloud API).

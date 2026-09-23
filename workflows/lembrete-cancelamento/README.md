@@ -41,8 +41,9 @@ resposta do cliente indefinidamente — se o cliente nunca respondesse, a execu�
 em "Waiting" para sempre.
 
 - **Limit Wait Time:** ativado (`limitWaitTime: true`), com `limitType: "afterTimeInterval"`,
-  `resumeAmount: 24`, `resumeUnit: "hours"` — a execução retoma automaticamente depois de 24h
-  mesmo sem resposta do cliente.
+  `resumeAmount: 10`, `resumeUnit: "minutes"` — a execução retoma automaticamente depois de 10
+  minutos mesmo sem resposta do cliente (valor de produção; ver "Bug: mensagem de timeout com
+  dados desatualizados" abaixo — chegou a ficar em 5 minutos por um teste manual esquecido).
 - **Detecção de timeout:** o node IF **Cliente Respondeu ou Deu Timeout?**, logo depois do
   Wait, verifica se o texto da mensagem do cliente está presente no payload:
   `{{ $json.body?.messages?.[0]?.text?.body ?? $json.messages?.[0]?.text?.body ?? "" }}`
@@ -51,12 +52,15 @@ em "Waiting" para sempre.
   webhook, esse campo vem preenchido com o texto do cliente. Quando retoma por timeout, o item
   que sai do Wait é o mesmo que entrou nele (a resposta do envio do lembrete no WhatsApp, que
   não tem `messages[0].text`), então a expressão resulta em string vazia — condição falsa.
-- **Branch de timeout:** vai para o node **Avisar Timeout do Lembrete no WhatsApp**, que envia
-  uma mensagem simples avisando que não houve resposta e que o agendamento continua como está,
-  usando `$('Processar Cada Agendamento')` (nome, serviço, telefone) — essa referência
-  continua acessível mesmo após o timeout, pois esse node já rodou antes do Wait no mesmo
-  caminho de execução. Depois, o fluxo volta para **Processar Cada Agendamento** para continuar
-  o loop com o próximo agendamento do lote (igual a todos os outros caminhos terminais deste
+- **Branch de timeout:** antes de avisar o cliente, passa por **Reverificar Agendamento Antes
+  do Timeout** → **Agendamento Ainda É o Mesmo?** (ver "Bug: mensagem de timeout com dados
+  desatualizados" abaixo) — só quando o agendamento não mudou é que vai para **Avisar Timeout
+  do Lembrete no WhatsApp**, que envia uma mensagem simples avisando que não houve resposta e
+  que o agendamento continua como está, usando `$('Processar Cada Agendamento')` (nome,
+  serviço, telefone) — essa referência continua acessível mesmo após o timeout, pois esse node
+  já rodou antes do Wait no mesmo caminho de execução. Depois, o fluxo volta para **Processar
+  Cada Agendamento** para continuar o loop com o próximo agendamento do lote (igual a todos os
+  outros caminhos terminais deste
   workflow) — sem isso, o loop pararia e os agendamentos seguintes do dia não seriam
   processados.
 
@@ -89,6 +93,49 @@ na remarcação) leem tudo via `$json` (no primeiro node do loop) ou `$('Process
 Agendamento').item.json` (nos nodes mais adiante, depois do Wait), sem nenhum lookup adicional.
 
 ## Histórico de correções
+
+- **2026-09-24 — Bug: mensagem de timeout com dados desatualizados ("execução fantasma"):**
+  cliente recebeu o lembrete às 10h36 (corte hoje às 16h), negociou remarcar em sequência
+  rápida (16h30 → ocupado, 17h → confirmado com sucesso pelo workflow "Agendamento via
+  WhatsApp") e, minutos depois, recebeu de volta "Não recebi resposta sobre o lembrete do seu
+  horário de corte hoje **às 16h**. Vou manter seu agendamento como está" — mencionando o
+  horário antigo, já superado pela remarcação.
+  - **Investigação:** não havia nenhuma execução em `"waiting"` (nem `"running"`/`"new"`) ativa
+    em nenhum dos dois workflows no momento da investigação — a execução responsável (nº 443)
+    já tinha completado. Ela havia sido disparada manualmente às 10h36 (`13:36:48Z`) durante
+    testes deste mesmo dia, encontrou o cliente na planilha, enviou o lembrete e ficou esperando
+    no node **Aguardar Resposta do Cliente**. O **"Aguardar Resposta do Cliente"** estava com
+    `resumeAmount: 5` **minutos** (não os 10 minutos de produção) — sobra de um teste anterior
+    que não tinha sido revertido. A execução expirou às 10h41 (`13:41:50Z`), exatamente na
+    janela em que o cliente negociava o novo horário por WhatsApp.
+  - **Causa raiz:** a resposta real do cliente ("17h", "17:30") não chega ao webhook desse Wait
+    node — ela chega pelo webhook do WhatsApp, que é o trigger do workflow **"Agendamento via
+    WhatsApp"** (ver "Limitação conhecida do protótipo — Wait node" abaixo; essa ponte nunca foi
+    implementada). Por isso a remarcação foi processada corretamente pelo outro workflow
+    (mudando `data` na planilha), mas esta execução, presa no Wait, **não tinha como saber
+    disso** e, ao expirar, enviou a mensagem de timeout com o horário antigo que tinha capturado
+    no momento do envio do lembrete — uma colisão de tempo entre os dois workflows, não uma
+    duplicidade de execuções.
+  - **Correções:**
+    1. `resumeAmount` do **Aguardar Resposta do Cliente** corrigido de volta para `10` minutos.
+    2. Nenhuma execução presa em `"waiting"` foi encontrada para cancelar.
+    3. **Proteção estrutural:** antes de enviar a mensagem de timeout, dois novos nodes —
+       **Reverificar Agendamento Antes do Timeout** (Google Sheets, relê a linha pelo
+       `event_id`) → **Agendamento Ainda É o Mesmo?** (IF, compara a `data` atual da planilha
+       com a `data` que esta execução capturou ao enviar o lembrete) — detectam se o
+       agendamento mudou (remarcado) ou sumiu (cancelado) por **qualquer caminho**, inclusive
+       pelo workflow de Agendamento, enquanto esta execução esperava. Se mudou, a mensagem de
+       timeout é suprimida em vez de avisar o cliente com dado velho. Optei por essa checagem
+       na planilha (fonte única da verdade) em vez de um controle "só a execução mais recente
+       vale" por telefone: a remarcação do incidente real aconteceu num workflow totalmente
+       separado, que nunca saberia de um controle desse tipo mantido só neste workflow.
+  - **Limitação que continua não resolvida:** mesmo com essas correções, o Wait node **nunca
+    recebe respostas reais** em produção (a ponte do "Limitação conhecida" abaixo segue
+    pendente) — ou seja, toda execução deste fluxo vai, mais cedo ou mais tarde, cair no branch
+    de timeout, mesmo quando o cliente responde normalmente pelo WhatsApp (a resposta só é
+    processada pelo outro workflow). A proteção acima evita a mensagem ficar **desatualizada**,
+    mas não faz o Wait node efetivamente escutar a resposta do cliente — isso continua sendo o
+    próximo passo antes de produção, descrito em "Limitação conhecida do protótipo" abaixo.
 
 - **2026-09-24 — Fonte de dados trocada de Calendar para a planilha (bug: loop travava e
   pulava clientes reais):** o Google Calendar usado como fonte (**"Buscar Agendamentos de

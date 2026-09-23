@@ -76,8 +76,8 @@
         "options": {},
         "limitWaitTime": true,
         "limitType": "afterTimeInterval",
-        "resumeAmount": 24,
-        "resumeUnit": "hours"
+        "resumeAmount": 10,
+        "resumeUnit": "minutes"
       }
     },
     {
@@ -91,6 +91,39 @@
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
           "conditions": [{ "leftValue": "={{ $json.body?.messages?.[0]?.text?.body ?? $json.messages?.[0]?.text?.body ?? \"\" }}", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }, "rightValue": "" }],
           "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f3a4b5c6-0d1e-4f2a-9b3c-7d8e9f0a1b2c",
+      "name": "Reverificar Agendamento Antes do Timeout",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1584, 300],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U", "cachedResultName": "Clientes - Automação PMEs", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit?usp=drivesdk" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "gid=0", "cachedResultName": "Sheet1", "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QnhO_lTEuhF_lOH6THAPL-QcaAiISjD-kJy-MvhB72U/edit#gid=0" },
+        "filtersUI": { "values": [{ "lookupColumn": "event_id", "lookupValue": "={{ $('Processar Cada Agendamento').item.json.event_id }}" }] },
+        "options": { "returnFirstMatch": true }
+      }
+    },
+    {
+      "id": "a4b5c6d7-1e2f-4a3b-8c4d-8e9f0a1b2c3d",
+      "name": "Agendamento Ainda É o Mesmo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1696, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            { "leftValue": "={{ $json.data }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "={{ $('Processar Cada Agendamento').item.json.data }}" }
+          ]
         },
         "options": {}
       }
@@ -404,7 +437,14 @@
     "Cliente Respondeu ou Deu Timeout?": {
       "main": [
         [{ "node": "Normalizar Resposta do Lembrete", "type": "main", "index": 0 }],
-        [{ "node": "Avisar Timeout do Lembrete no WhatsApp", "type": "main", "index": 0 }]
+        [{ "node": "Reverificar Agendamento Antes do Timeout", "type": "main", "index": 0 }]
+      ]
+    },
+    "Reverificar Agendamento Antes do Timeout": { "main": [[{ "node": "Agendamento Ainda É o Mesmo?", "type": "main", "index": 0 }]] },
+    "Agendamento Ainda É o Mesmo?": {
+      "main": [
+        [{ "node": "Avisar Timeout do Lembrete no WhatsApp", "type": "main", "index": 0 }],
+        [{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]
       ]
     },
     "Avisar Timeout do Lembrete no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },

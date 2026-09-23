@@ -28,9 +28,15 @@ dele: confirmar, cancelar ou remarcar.
         Remarcar?** (Switch) — 4 caminhos:
         - **Confirmar:** envia mensagem final de confirmação.
         - **Cancelar:** deleta o evento no Calendar (pelo `event_id`) → confirma o cancelamento.
-        - **Remarcar:** verifica se o novo horário está livre → se sim, **atualiza** o evento
-          existente (não cria um novo) e atualiza a coluna `data` na planilha (casando pela
-          coluna `event_id`) → confirma a remarcação; se não, pede outro horário.
+        - **Remarcar:** **Validar Horário de Funcionamento** (Code) → **Horário Dentro do
+          Expediente?** (IF) — mesma validação determinística (09h-18h, seg-sáb) do workflow
+          "Agendamento via WhatsApp", ver "Horário de funcionamento na remarcação" abaixo.
+          - **Fora do expediente:** avisa o cliente e pede outro horário, sem consultar o
+            Calendar nem tocar na planilha.
+          - **Dentro do expediente:** verifica se o novo horário está livre → se sim,
+            **atualiza** o evento existente (não cria um novo) e atualiza a coluna `data` na
+            planilha (casando pela coluna `event_id`) → confirma a remarcação; se não, pede
+            outro horário.
         - **Não entendi (fallback):** pede para o cliente esclarecer a resposta.
       - **Não (timeout):** **Avisar Timeout do Lembrete no WhatsApp** — avisa o cliente que não
         houve resposta e que o agendamento foi mantido como está. Não passa pela
@@ -95,8 +101,40 @@ nodes seguintes (envio do lembrete, confirmação, cancelamento, atualização d
 na remarcação) leem tudo via `$json` (no primeiro node do loop) ou `$('Processar Cada
 Agendamento').item.json` (nos nodes mais adiante, depois do Wait), sem nenhum lookup adicional.
 
+## Horário de funcionamento na remarcação
+
+A barbearia funciona de segunda a sábado, das 09h às 18h — mesma regra do workflow
+"Agendamento via WhatsApp" (ver `workflows/agendamento/README.md`, seção "Horário de
+funcionamento"). Quando o cliente responde ao lembrete pedindo para remarcar, o
+`novo_horario_inicio`/`novo_horario_fim` extraído pela IA (**Classificar Resposta do
+Lembrete**) passa por **Validar Horário de Funcionamento** (Code) → **Horário Dentro do
+Expediente?** (IF), inseridos entre "Confirmar, Cancelar ou Remarcar?" (saída remarcar) e
+"Verificar Novo Horário Disponível". O Code node calcula, em `America/Sao_Paulo` (Luxon):
+
+- `novo_horario_inicio` tem hora entre 09:00 (inclusive) e 18:00 (exclusive);
+- `novo_horario_fim` não ultrapassa 18:00;
+- o dia da semana de `novo_horario_inicio` não é domingo (`weekday !== 7`).
+
+Se qualquer condição falhar, o fluxo não chega a "Verificar Novo Horário Disponível" nem a
+"Atualizar Evento no Calendar"/"Atualizar Data na Planilha" — vai direto para **Avisar Horário
+Fora do Expediente no WhatsApp** (reaproveita o mesmo texto usado em "Agendamento via
+WhatsApp"), e volta para **Processar Cada Agendamento** para continuar o loop. Antes dessa
+mudança, o ramo de remarcação só checava disponibilidade no Calendar — um cliente podia pedir
+(e a IA aceitar) um horário fora do expediente, e o evento seria atualizado normalmente desde
+que a Calendar API confirmasse "livre" naquele horário.
+
 ## Histórico de correções
 
+- **2026-09-24 — Faltava validação de horário de funcionamento na remarcação:** o ramo de
+  remarcação (cliente responde ao lembrete pedindo outro horário) só checava disponibilidade
+  no Google Calendar antes de atualizar o evento — não existia nenhuma checagem de horário de
+  funcionamento (09h-18h, seg-sáb), diferente do workflow "Agendamento via WhatsApp", que já
+  tinha essa validação nos fluxos de agendar e remarcar desde 2026-09-23. Um cliente podia
+  pedir (e a IA aceitar) remarcar para um horário fora do expediente, e o evento seria
+  atualizado normalmente contanto que a Calendar API confirmasse o horário como livre.
+  Adicionados **Validar Horário de Funcionamento** (Code) → **Horário Dentro do Expediente?**
+  (IF), replicando a mesma lógica e o mesmo texto de aviso do outro workflow — ver "Horário de
+  funcionamento na remarcação" acima.
 - **2026-09-24 — Emoji/agradecimento curto tratado como resposta não reconhecida:** cliente
   respondendo ao lembrete com só um emoji (👍, 🙏) ou um agradecimento curto ("ok", "blz",
   "obrigado") — normalmente reconhecendo o lembrete, sem pedir nada — caía em

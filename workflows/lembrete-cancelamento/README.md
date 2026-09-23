@@ -152,6 +152,15 @@ filtro do lembrete diário) e **escreve** `status`/`atualizado_em` em três pont
   sido marcado manualmente como `"cancelado"` ou `"no_show"` antes disso. `"no_show"` só é
   preenchido manualmente, direto na planilha; nenhum node grava esse valor automaticamente.
 
+> **Bug corrigido (2026-09-24):** os três nodes acima também reescreviam `preco` e `criado_em`
+> como vazio, mesmo sem estarem em `columns.value` — o node Update Row do Google Sheets escreve
+> um range contíguo de células (da coluna mapeada mais à esquerda até a mais à direita: aqui,
+> `status` a `atualizado_em`), e qualquer coluna nesse meio sem valor explícito vira vazio.
+> Corrigido reenviando os valores atuais de `preco`/`criado_em` (já disponíveis no item — vieram
+> da própria planilha via "Processar Cada Agendamento" ou, na rotina das 22h, do próprio `$json`
+> lido) em vez de omiti-los. Mesmo bug e mesma correção no workflow "Agendamento via WhatsApp" —
+> ver o README daquele workflow para o teste que validou a correção.
+
 ## Histórico de correções
 
 - **2026-09-24 — Ciclo de vida do agendamento (status na planilha):** a planilha ganhou as

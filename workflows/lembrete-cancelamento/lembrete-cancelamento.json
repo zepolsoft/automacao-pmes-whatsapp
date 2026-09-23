@@ -272,6 +272,8 @@
           "value": {
             "event_id": "={{ $('Processar Cada Agendamento').item.json.event_id }}",
             "status": "cancelado",
+            "preco": "={{ $('Processar Cada Agendamento').item.json.preco }}",
+            "criado_em": "={{ $('Processar Cada Agendamento').item.json.criado_em }}",
             "atualizado_em": "={{ $now.toISO() }}"
           },
           "matchingColumns": ["event_id"],
@@ -418,6 +420,8 @@
             "event_id": "={{ $('Processar Cada Agendamento').item.json.event_id }}",
             "data": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}",
             "status": "remarcado",
+            "preco": "={{ $('Processar Cada Agendamento').item.json.preco }}",
+            "criado_em": "={{ $('Processar Cada Agendamento').item.json.criado_em }}",
             "atualizado_em": "={{ $now.toISO() }}"
           },
           "matchingColumns": ["event_id"],
@@ -573,6 +577,8 @@
           "value": {
             "event_id": "={{ $json.event_id }}",
             "status": "concluido",
+            "preco": "={{ $json.preco }}",
+            "criado_em": "={{ $json.criado_em }}",
             "atualizado_em": "={{ $now.toISO() }}"
           },
           "matchingColumns": ["event_id"],

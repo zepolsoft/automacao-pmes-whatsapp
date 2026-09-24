@@ -566,6 +566,33 @@ confirmação. O fluxo de **remarcar** no workflow "Lembrete, Cancelamento e Rem
 desse problema: a segunda etapa de confirmação lá usa um node Wait nativo (resume por webhook),
 que retoma direto no meio do fluxo sem passar de novo pelo dedup/lock.
 
+### Bug: remarcar para um horário livre travava sem erro (2026-09-24)
+
+Depois de corrigir o lock, novo teste: pedir remarcação pra um horário livre também não enviava a
+pergunta de confirmação — nenhuma mensagem chegava, sem erro no Error Workflow. Execução (#668)
+mostrou `lastNodeExecuted: "Listar Eventos no Novo Horário (Remarcar)"` — o node seguinte
+(**Verificar Disponibilidade para Remarcar**) nunca chegou a rodar.
+
+**Causa:** o branch de **agendar** checa disponibilidade com a operação nativa de
+`availability` do node Google Calendar (`resource: calendar`), que sempre devolve exatamente 1
+item com `available: true/false`, esteja o horário livre ou ocupado. O branch de **remarcar**
+faz diferente: **Listar Eventos no Novo Horário (Remarcar)** lista eventos crus
+(`resource: event`, `operation: getAll`) no intervalo pedido, e um Code node
+(**Verificar Disponibilidade para Remarcar**) calcula `available` comparando os `id`s retornados
+com o `event_id` do agendamento atual (pra não contar o próprio evento como conflito). Quando o
+horário pedido está livre — o caso normal — a listagem retorna **zero itens**, e sem
+`alwaysOutputData` nenhum item chega no Code node seguinte: a execução simplesmente para ali, sem
+erro, sem rodar o IF **Novo Horário Disponível?** nem nada depois dele.
+
+**Correção:**
+1. `alwaysOutputData: true` em **Listar Eventos no Novo Horário (Remarcar)**, pra sempre passar
+   pelo menos um item sintético adiante mesmo com zero eventos encontrados.
+2. Ajuste em **Verificar Disponibilidade para Remarcar** pra não contar esse item sintético (sem
+   `id`) como conflito: `filter(item => item.json.id && item.json.id !== eventoAtualId)` em vez
+   de só `filter(item => item.json.id !== eventoAtualId)` — sem isso, o item sintético (`id`
+   undefined) seria tratado como um conflito real e `available` sairia sempre `false`, mesmo com
+   o horário livre.
+
 ## Planilha de serviços e preços
 
 Nova planilha: **[Serviços - Barbearia](https://docs.google.com/spreadsheets/d/1fOA2tNHYHJPMlk4SKZfBJlm5E0BXWiDppYPfSiPI0sc/edit)**

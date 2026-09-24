@@ -734,6 +734,29 @@ Remarcação" (mesmo `dataTableId` nos dois):
 > configuração): a busca por uma mensagem inexistente passou a retornar 1 item sintético vazio,
 > em vez de zero itens.
 
+## Bug: remarcar só o horário apagava o serviço do evento (2026-09-24)
+
+Ao remarcar mencionando só o novo horário (ex.: "Gostaria de remarcar para amanhã às 15h", sem
+repetir o serviço), a planilha ficava correta (`servico` continuava "Corte de adulto") mas o
+**título do evento no Google Calendar** virava "não especificado - José Zavaleta", perdendo o
+serviço original.
+
+**Causa:** **Atualizar Evento no Calendar** montava o `summary` direto a partir de
+`output.servico` da IA — que sai `"não especificado"` quando o cliente não menciona o serviço
+nessa mensagem (a IA não inventa um serviço que não foi dito). A planilha já não tinha esse
+problema porque **Atualizar Linha na Planilha** sempre usava o `servico` da linha atual
+(`Selecionar Agendamento Mais Recente (Remarcar)`) — mas incondicionalmente, o que também não
+está certo: se o cliente pedisse pra trocar o serviço JUNTO com o horário, a planilha ignoraria
+essa troca.
+
+**Correção**, aplicada de forma simétrica nos dois nodes: usa o `servico` extraído da mensagem
+atual só quando o cliente de fato mencionou um (diferente de `"não especificado"`/vazio);
+caso contrário, mantém o `servico` já salvo na linha do agendamento.
+`($json.output.servico === 'não especificado' || $json.output.servico === '') ? <servico atual
+da linha> : $json.output.servico`. Isso cobre os dois cenários: remarcar só o horário preserva o
+serviço original (Calendar e planilha), e remarcar pedindo também outro serviço agora atualiza
+os dois lugares — antes só o Calendar mudava (de forma errada), a planilha nunca mudava.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

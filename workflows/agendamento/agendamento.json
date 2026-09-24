@@ -675,7 +675,7 @@
         "updateFields": {
           "start": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
           "end": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_fim }}",
-          "summary": "={{ $('Interpretar Intenção do Cliente').item.json.output.servico }} - {{ $('Interpretar Intenção do Cliente').item.json.output.nome_cliente }}"
+          "summary": "={{ ($('Interpretar Intenção do Cliente').item.json.output.servico === 'não especificado' || $('Interpretar Intenção do Cliente').item.json.output.servico === '') ? $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.servico : $('Interpretar Intenção do Cliente').item.json.output.servico }} - {{ $('Interpretar Intenção do Cliente').item.json.output.nome_cliente }}"
         }
       }
     },
@@ -693,7 +693,7 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "servico": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.servico }}",
+            "servico": "={{ ($('Interpretar Intenção do Cliente').item.json.output.servico === 'não especificado' || $('Interpretar Intenção do Cliente').item.json.output.servico === '') ? $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.servico : $('Interpretar Intenção do Cliente').item.json.output.servico }}",
             "data": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
             "event_id": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.event_id }}",
             "status": "remarcado",

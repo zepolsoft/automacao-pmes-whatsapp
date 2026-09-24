@@ -8,9 +8,12 @@ automaticamente, se houver horário livre.
 ## Objetivo e o que este workflow NÃO faz
 
 **Faz:** processa qualquer mensagem recebida no WhatsApp da barbearia, a qualquer momento do
-dia — interpreta a intenção (agendar, remarcar, cancelar, dúvida), verifica disponibilidade
-real no Google Calendar, cria/atualiza/cancela o evento, grava o resultado na planilha
-"Clientes - Automação PMEs" e responde o cliente na mesma conversa.
+dia — interpreta a intenção (agendar, remarcar, cancelar, consultar, dúvida), verifica
+disponibilidade real no Google Calendar, cria/atualiza/cancela o evento, grava o resultado na
+planilha "Clientes - Automação PMEs" e responde o cliente na mesma conversa. Quando o cliente
+pergunta sobre um agendamento que já tem (ex.: "que horas marquei hoje?"), a resposta vem de
+uma consulta real na planilha, não de um palpite da IA — ver "Saída 'consultar'" no Fluxo
+abaixo.
 
 **NÃO faz:**
 - Não dispara lembretes automáticos antes de um horário marcado — isso é o outro workflow,
@@ -34,12 +37,15 @@ real no Google Calendar, cria/atualiza/cancela o evento, grava o resultado na pl
 | Buscar Serviços e Preços / Formatar Lista de Serviços | Lê a planilha de serviços e monta o texto injetado no prompt da IA |
 | Interpretar Intenção do Cliente | AI Agent (Claude) — classifica intenção, extrai serviço/data/hora e escreve `confirmacao_texto` |
 | Corrigir Falsa Confirmação em Dúvida | Rede de segurança: impede a IA de "confirmar" algo sem checar disponibilidade de verdade |
-| Qual a Intenção do Cliente? | Switch que roteia para agendar / remarcar / cancelar / dúvida |
+| Qual a Intenção do Cliente? | Switch que roteia para agendar / remarcar / cancelar / consultar / dúvida |
 | Validar Horário de Funcionamento (+ Remarcar) | Code determinístico: rejeita horário fora de 9h-18h (seg-sáb) ou já passado |
 | Verificar Disponibilidade / Listar Eventos no Novo Horário (Remarcar) + Verificar Disponibilidade para Remarcar | Checagem real no Google Calendar (a de remarcar exclui o próprio evento do cliente da lista de conflitos) |
 | Criar Evento no Calendar / Atualizar Evento no Calendar / Cancelar Evento no Calendar | Efetiva a ação no Calendar |
 | Salvar Cliente na Planilha / Atualizar Linha na Planilha / Atualizar Linha na Planilha (Cancelar) | Grava o resultado na planilha "Clientes - Automação PMEs" |
 | Confirmar Agendamento / Confirmar Remarcação / Confirmar Cancelamento / Responder Dúvida / Sugerir Outro Horário / Avisar Horário Fora do Expediente / Avisar Sem Agendamento Ativo no WhatsApp | Respostas ao cliente (ver "Sincronização de tom" abaixo sobre como são escritas) |
+| Buscar Agendamentos do Cliente (Consultar) | Google Sheets, lê todas as linhas com o `telefone` do cliente — só leitura, não cria/altera/cancela nada |
+| Formatar Resposta da Consulta | Code: filtra só `status` `agendado`/`remarcado`, ordena por data e monta a mensagem com os dados reais (nunca com dado inventado pela IA) |
+| Responder Consulta no WhatsApp | Envia a mensagem montada por "Formatar Resposta da Consulta" |
 
 ## Colunas da planilha "Clientes - Automação PMEs"
 
@@ -52,6 +58,11 @@ real no Google Calendar, cria/atualiza/cancela o evento, grava o resultado na pl
 | `preco` | lê (remarcar/cancelar, para reescrever sem alterar) | escreve | calculado 1x na criação (lookup na planilha de serviços); nunca recalculado depois |
 | `criado_em` | lê (remarcar/cancelar, para reescrever sem alterar) | escreve | gravado 1x na criação, nunca muda depois |
 | `atualizado_em` | — | escreve | em toda remarcação/cancelamento |
+
+Na saída "consultar", **Buscar Agendamentos do Cliente (Consultar)** lê `telefone`, `servico`,
+`data` e `status` de todas as linhas do cliente (sem filtro de status na própria busca — o
+filtro por `agendado`/`remarcado` acontece depois, em "Formatar Resposta da Consulta") e não
+escreve nada em nenhuma coluna.
 
 Detalhes de cada bug já corrigido nessas colunas (inclusive o bug do range do Update Row) estão
 na seção "Colunas de status e preço na planilha" mais abaixo.
@@ -66,9 +77,12 @@ na seção "Colunas de status e preço na planilha" mais abaixo.
   por telefone e data no passado" abaixo.
 - **Lock por telefone** (30s) — evita duas execuções paralelas do mesmo cliente, mesma seção.
 - **Nunca confirmar sem checar disponibilidade real** — ver seção dedicada abaixo.
-- **Agendar vs. remarcar vs. cancelar** distinguidos por regra explícita no prompt da IA — ver
-  "REGRA CRÍTICA — AGENDAR VS REMARCAR" no system message do node "Interpretar Intenção do
-  Cliente".
+- **Agendar vs. remarcar vs. cancelar vs. consultar** distinguidos por regras explícitas no
+  prompt da IA — ver "REGRA CRÍTICA — AGENDAR VS REMARCAR" e "REGRA — CONSULTAR VS DÚVIDA VS
+  AGENDAR" no system message do node "Interpretar Intenção do Cliente".
+- **Consulta de agendamento com dados reais** (2026-09-24) — quando o cliente pergunta sobre um
+  agendamento que já tem, a resposta vem de uma leitura real da planilha (ver "Saída
+  'consultar'" no Fluxo abaixo), nunca de um palpite da IA.
 
 ## Sincronização de tom com o workflow de lembrete
 
@@ -251,6 +265,22 @@ então essa sincronização é manual e intencional, não automática.
      **Atualizar Linha na Planilha (Cancelar)** (`update`, casando pela coluna `event_id`,
      grava `status: "cancelado"` e `atualizado_em` — **não apaga mais a linha**, ver "Colunas
      de status e preço na planilha" abaixo) → confirma o cancelamento no WhatsApp.
+
+### Saída "consultar" (2026-09-24)
+
+9. **Buscar Agendamentos do Cliente (Consultar)** (Google Sheets, `read`, filtro por
+   `telefone`, `alwaysOutputData: true`) → **Formatar Resposta da Consulta** (Code) → confirma
+   no WhatsApp. Sem checagem de disponibilidade nem escrita — é só leitura.
+   - O Code node filtra as linhas retornadas mantendo só `status: "agendado"` ou
+     `"remarcado"` (ignora `cancelado`/`concluido`/`no_show`), ordena por `data` e monta a
+     mensagem a partir dos dados reais — nunca do `confirmacao_texto` da IA, que para esta
+     saída é só uma frase de transição descartada (ver "REGRA — CONSULTAR VS DÚVIDA VS
+     AGENDAR" no system message de "Interpretar Intenção do Cliente").
+   - **Nenhum agendamento ativo encontrado:** avisa educadamente e pergunta se quer marcar um
+     horário.
+   - **Um agendamento ativo:** confirma serviço e data/horário por extenso (ex.: "Tem sim! Seu
+     Corte de adulto está marcado para quinta-feira, dia 24 de setembro, às 16h.").
+   - **Mais de um agendamento ativo:** lista todos, um por linha.
 
 ### Saída "duvida" (fallback)
 

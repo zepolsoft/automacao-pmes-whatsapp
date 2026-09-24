@@ -532,6 +532,17 @@ Mesmo ajuste aplicado no workflow "Agendamento via WhatsApp" (`criado_em` em **S
 Planilha**, `atualizado_em` em **Atualizar Linha na Planilha** e **Atualizar Linha na Planilha
 (Cancelar)**).
 
+## Identidade "Zap" (2026-09-24)
+
+Mesma mudança de identidade/tom do workflow "Agendamento via WhatsApp": o assistente se chama
+**Zap**. Aqui o ajuste é mais leve — **Classificar Resposta do Lembrete** é um classificador
+fechado de 4 categorias (confirmar/cancelar/remarcar/indefinido), não um chat aberto, então só
+a linha de abertura do persona foi adicionada ("Você é o Zap, assistente virtual de agendamento
+de uma barbearia..."), por consistência de tom com o outro workflow. Nenhuma regra de
+classificação mudou. Uma pergunta como "qual seu nome?" nesse contexto (resposta a um lembrete)
+continua caindo em `decisao = "indefinido"`, tratada pelo node estático já existente **Pedir
+Esclarecimento no WhatsApp** — fora do escopo desta mudança.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

@@ -768,6 +768,29 @@ Linha na Planilha (Cancelar)**, `atualizado_em`). Vale só pra escritas novas �
 planilha não foram alteradas. Mesmo ajuste aplicado no workflow "Lembrete, Cancelamento e
 Remarcação".
 
+## Identidade "Zap" (2026-09-24)
+
+O assistente virtual da barbearia agora tem nome: **Zap**. Mudança só de identidade/tom no
+system message de **Interpretar Intenção do Cliente** — nenhuma regra de negócio (intencao,
+disponibilidade, confirmação, etc.) foi alterada:
+
+- Linha de abertura do persona nomeia o assistente ("Você é o Zap, assistente virtual de
+  agendamento de uma barbearia...").
+- Nova regra de cenário: quando o cliente pergunta o nome/identidade do assistente (ex.:
+  "qual seu nome?", "quem é você?", "você é uma pessoa de verdade?"), continua classificado
+  como `intencao = "duvida"` — só muda o texto de resposta, sempre deixando claro que é uma
+  automação, nunca fingindo ser uma pessoa real. Exemplo: "Sou o Zap, assistente virtual da
+  barbearia! 😊 Posso te ajudar a agendar, remarcar ou cancelar um horário."
+- Saudação inicial (duvida + primeira mensagem da conversa, sem histórico anterior) pode
+  opcionalmente se apresentar como Zap — sem repetir o nome nas mensagens seguintes.
+
+Testado com um workflow utilitário descartável (Manual Trigger → Set simulando a mensagem
+"Qual seu nome?" → mesmo AI Agent/system message/parser do node real, apontando pro mesmo
+credential Anthropic): retornou `intencao: "duvida"`, `confirmado: false`,
+`confirmacao_texto: "Sou o Zap, assistente virtual da barbearia! 😊 Posso te ajudar a agendar,
+remarcar ou cancelar um horário."` — confirmando o comportamento esperado sem precisar de uma
+mensagem real via WhatsApp.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

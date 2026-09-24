@@ -42,6 +42,8 @@ abaixo.
 | Validar Horário de Funcionamento (+ Remarcar) | Code determinístico: rejeita horário fora de 9h-18h (seg-sáb) ou já passado |
 | Verificar Disponibilidade / Listar Eventos no Novo Horário (Remarcar) + Verificar Disponibilidade para Remarcar | Checagem real no Google Calendar (a de remarcar exclui o próprio evento do cliente da lista de conflitos) |
 | Filtrar Agendamento Ativo (Remarcar) / (Cancelar) | Mantém só linhas `agendado`/`remarcado` antes de escolher "o" agendamento do cliente — evita pegar uma linha já concluída/cancelada |
+| Cliente Confirmou o Horário? (Agendar) / (Remarcar) | Gate: só cria/atualiza Calendar+Sheets quando `output.confirmado = true` — ver "Confirmação explícita antes de escrever" |
+| Propor Horário no WhatsApp | Node compartilhado: pergunta "posso confirmar?" quando `confirmado = false`, sem tocar em Calendar/Sheets |
 | Criar Evento no Calendar / Atualizar Evento no Calendar / Cancelar Evento no Calendar | Efetiva a ação no Calendar |
 | Salvar Cliente na Planilha / Atualizar Linha na Planilha / Atualizar Linha na Planilha (Cancelar) | Grava o resultado na planilha "Clientes - Automação PMEs" |
 | Confirmar Agendamento / Confirmar Remarcação / Confirmar Cancelamento / Responder Dúvida / Sugerir Outro Horário / Avisar Horário Fora do Expediente / Avisar Sem Agendamento Ativo no WhatsApp | Respostas ao cliente (ver "Sincronização de tom" abaixo sobre como são escritas) |
@@ -213,11 +215,16 @@ então essa sincronização é manual e intencional, não automática.
      funciona das 9h às 18h (seg-sáb) e pede outro horário, sem consultar o Calendar.
 11. **Verificar Disponibilidade** — Google Calendar, checa se o horário pedido está livre.
 12. **Horário Disponível?**
-   - **Sim:** Cria o evento no Calendar → salva nome, telefone, serviço, data, `event_id`,
-     `status: "agendado"`, `preco` (copiado de "Buscar Serviços e Preços" nesse momento — ver
-     "Colunas de status e preço na planilha" abaixo) e `criado_em` na planilha do Google Sheets
-     → confirma o agendamento no WhatsApp.
-   - **Não:** responde no WhatsApp pedindo outro dia/horário.
+   - **Sim:** **Cliente Confirmou o Horário? (Agendar)** (IF, checa `output.confirmado` — ver
+     "Confirmação explícita antes de escrever" abaixo).
+     - **Não** (`confirmado = false`, é uma proposta nova): **Propor Horário no WhatsApp** —
+       envia o `confirmacao_texto` perguntando se pode confirmar, sem tocar em Calendar/Sheets.
+     - **Sim** (`confirmado = true`, cliente acabou de responder "sim" à proposta): Cria o
+       evento no Calendar → salva nome, telefone, serviço, data, `event_id`,
+       `status: "agendado"`, `preco` (copiado de "Buscar Serviços e Preços" nesse momento — ver
+       "Colunas de status e preço na planilha" abaixo) e `criado_em` na planilha do Google
+       Sheets → confirma definitivamente o agendamento no WhatsApp.
+   - **Não** (horário ocupado): responde no WhatsApp pedindo outro dia/horário.
 
    > **Bug corrigido (2026-09-22):** o node "Confirmar Agendamento no WhatsApp" tinha um texto
    > fixo ("Prontinho! Seu horário para {{ servico }} ficou confirmado para ... Até lá! 😊")
@@ -283,11 +290,15 @@ então essa sincronização é manual e intencional, não automática.
          evento cujo `id` é igual ao `event_id` já salvo do próprio cliente antes de decidir
          `available` — ver "Remarcar para horário próximo do atual" abaixo) → **Novo Horário
          Disponível?**
-       - **Sim:** **Atualizar Evento no Calendar** (`update`, usando o `event_id` encontrado)
-         → **Atualizar Linha na Planilha** (`update`, casando pela coluna `event_id`,
-         atualizando `data`, `status: "remarcado"` e `atualizado_em` — `servico`/`preco`/
-         `criado_em` são reescritos sem alterar, ver "Colunas de status e preço" abaixo) →
-         confirma a remarcação no WhatsApp.
+       - **Sim:** **Cliente Confirmou o Horário? (Remarcar)** (IF, checa `output.confirmado` —
+         ver "Confirmação explícita antes de escrever" abaixo).
+         - **Não** (`confirmado = false`): **Propor Horário no WhatsApp** pergunta se pode
+           confirmar a mudança, sem tocar em Calendar/planilha.
+         - **Sim** (`confirmado = true`): **Atualizar Evento no Calendar** (`update`, usando o
+           `event_id` encontrado) → **Atualizar Linha na Planilha** (`update`, casando pela
+           coluna `event_id`, atualizando `data`, `status: "remarcado"` e `atualizado_em` —
+           `servico`/`preco`/`criado_em` são reescritos sem alterar, ver "Colunas de status e
+           preço" abaixo) → confirma definitivamente a remarcação no WhatsApp.
        - **Não:** reaproveita o node "Sugerir Outro Horário no WhatsApp" do fluxo de agendar.
 
    > **Bug corrigido (2026-09-22):** o node "Confirmar Remarcação no WhatsApp" tinha um texto
@@ -483,6 +494,42 @@ Correção em duas camadas:
 
    Assim, nenhuma mensagem de confirmação chega ao cliente sem que o fluxo tenha efetivamente
    passado (ou vá passar) por uma checagem real de disponibilidade no Calendar.
+
+## Confirmação explícita antes de escrever (2026-09-24)
+
+Antes desta mudança, assim que o fluxo confirmava serviço + data/hora completos e via que o
+horário estava livre no Calendar, ele já criava o evento/atualizava a linha na mesma execução
+— sem perguntar ao cliente antes. Isso já tinha causado bugs (ex.: o bug de duplicidade
+documentado acima, onde um agendamento parcial foi criado com `servico: "não especificado"`).
+Agora existe uma etapa de confirmação explícita, separando claramente **coleta/proposta** (não
+escreve nada) de **execução** (só depois do "sim" do cliente):
+
+1. A IA (`Interpretar Intenção do Cliente`) ganhou um novo campo no output, `confirmado`
+   (booleano): `true` só quando a mensagem atual é uma resposta afirmativa a uma proposta de
+   horário que o próprio assistente acabou de fazer nesta conversa (ex.: perguntou "posso
+   confirmar?" e o cliente respondeu "sim"); `false` em qualquer outro caso, inclusive a
+   primeira vez que um horário é proposto.
+2. Depois de **Horário Disponível?** (agendar) ou **Novo Horário Disponível?** (remarcar)
+   confirmarem que o horário está livre, um novo IF — **Cliente Confirmou o Horário?
+   (Agendar)** / **(Remarcar)** — decide o que fazer:
+   - `confirmado = false`: **Propor Horário no WhatsApp** (node compartilhado pelos dois
+     fluxos) envia o `confirmacao_texto` da IA, que nessa etapa é sempre uma pergunta (ex.:
+     "Perfeito! Corte amanhã às 10h está livre — posso confirmar?") — nada é criado ou
+     atualizado em Calendar/Sheets.
+   - `confirmado = true`: segue para **Criar Evento no Calendar** / **Atualizar Evento no
+     Calendar** normalmente, como antes.
+3. Quando o cliente responde "sim" (ou pede pra mudar algo), a mensagem seguinte passa de novo
+   por todo o fluxo — a IA releia o histórico da conversa para recuperar serviço/data/horário
+   que estavam sendo propostos, marca `confirmado = true` (ou `false` se o cliente pediu outra
+   coisa) e o sistema reavalia horário de funcionamento e disponibilidade real de novo antes de
+   decidir — não confia cegamente no que foi checado na proposta anterior, protegendo contra o
+   horário ter sido ocupado por outra pessoa nesse meio-tempo.
+4. Se o cliente responder negativamente ou pedir pra mudar algo (outro horário, outro
+   serviço), a IA gera uma nova proposta com `confirmado = false`, reentrando no passo 2 — sem
+   precisar de nenhuma lógica nova, é o mesmo fluxo de sempre se repetindo.
+
+Isso vale simetricamente para **agendar** e **remarcar** — os dois passam pelo mesmo padrão de
+gate, cada um com seu próprio IF de confirmação, mas compartilhando o node de proposta.
 
 ## Planilha de serviços e preços
 

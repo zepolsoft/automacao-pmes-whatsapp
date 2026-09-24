@@ -129,10 +129,12 @@ então essa sincronização é manual e intencional, não automática.
           "Agendamento via WhatsApp", ver "Horário de funcionamento na remarcação" abaixo.
           - **Fora do expediente:** avisa o cliente e pede outro horário, sem consultar o
             Calendar nem tocar na planilha.
-          - **Dentro do expediente:** verifica se o novo horário está livre → se sim,
-            **atualiza** o evento existente (não cria um novo) e atualiza a coluna `data`,
-            `status: "remarcado"` e `atualizado_em` na planilha (casando pela coluna
-            `event_id`) → confirma a remarcação; se não, pede outro horário.
+          - **Dentro do expediente:** verifica se o novo horário está livre → se não, pede
+            outro horário; se sim, **Propor Remarcação no WhatsApp** pergunta se pode
+            confirmar a mudança e aguarda uma SEGUNDA resposta do cliente (ver "Confirmação
+            explícita antes de remarcar" abaixo) — só então **atualiza** o evento existente
+            (não cria um novo) e a coluna `data`, `status: "remarcado"` e `atualizado_em` na
+            planilha (casando pela coluna `event_id`) → confirma a remarcação de verdade.
         - **Não entendi (fallback):** pede para o cliente esclarecer a resposta.
       - **Não (timeout):** **Avisar Timeout do Lembrete no WhatsApp** — avisa o cliente que não
         houve resposta e que o agendamento foi mantido como está. Não passa pela
@@ -227,6 +229,43 @@ WhatsApp"), e volta para **Processar Cada Agendamento** para continuar o loop. A
 mudança, o ramo de remarcação só checava disponibilidade no Calendar — um cliente podia pedir
 (e a IA aceitar) um horário fora do expediente, e o evento seria atualizado normalmente desde
 que a Calendar API confirmasse "livre" naquele horário.
+
+## Confirmação explícita antes de remarcar (2026-09-24)
+
+Antes desta mudança, assim que "Novo Horário Disponível?" confirmava que o novo horário estava
+livre, o sistema já atualizava o evento no Calendar e a linha na planilha na mesma execução —
+sem perguntar ao cliente antes. Agora existe uma segunda rodada de pergunta/resposta, separando
+**proposta** (não escreve nada) de **execução** (só depois do "sim"):
+
+1. **Propor Remarcação no WhatsApp** (renomeado do antigo node de confirmação final — o texto
+   gerado por "Classificar Resposta do Lembrete" para `decisao = "remarcar"` agora é sempre uma
+   pergunta, nunca uma confirmação definitiva) envia "posso confirmar a remarcação pra [novo
+   horário]?" e não toca em Calendar/planilha.
+2. **Aguardar Confirmação da Remarcação** (Wait, mesmo padrão do "Aguardar Resposta do
+   Cliente": `resume: webhook`, timeout de 10 min) → **Cliente Confirmou a Remarcação ou Deu
+   Timeout?** (IF, mesmo padrão de detecção de timeout do primeiro Wait).
+   - **Timeout:** **Avisar Timeout da Confirmação no WhatsApp** — avisa que não houve resposta
+     e que o horário **original** (não o proposto) foi mantido → volta pro loop.
+   - **Respondeu:** **Normalizar Confirmação da Remarcação** (Set, extrai o texto da resposta)
+     → **Classificar Confirmação da Remarcação** — um AI Agent **dedicado**, mais simples que
+     o principal (tem seu próprio modelo Claude e parser só para essa pergunta de sim/não),
+     recebe a pergunta que foi feita + a resposta do cliente e retorna `confirmado` (booleano)
+     e um `confirmacao_texto` já adequado a cada caso.
+     - `confirmado = false` (negou ou resposta ambígua): **Avisar Remarcação Não Confirmada no
+       WhatsApp** — usa o `confirmacao_texto` do classificador, tranquilizando que o horário
+       original continua valendo → volta pro loop, **sem tocar em Calendar/planilha**.
+     - `confirmado = true`: só agora **Atualizar Evento no Calendar** → **Atualizar Data na
+       Planilha** → **Enviar Confirmação Final da Remarcação no WhatsApp** (node novo, usa o
+       `confirmacao_texto` do classificador dedicado, não mais o de "Classificar Resposta do
+       Lembrete") → volta pro loop.
+
+**Escopo deliberadamente reduzido em relação ao primeiro Wait:** esse segundo ciclo não tem
+deduplicação por `message_id` nem lock por telefone, e não reverifica se o agendamento mudou
+antes de avisar timeout (como o primeiro Wait faz via "Reverificar Agendamento Antes do
+Timeout"). Decisão consciente para não dobrar a complexidade do workflow: atualizar o Calendar/
+planilha é uma operação idempotente (repetir a mesma atualização não cria duplicata, diferente
+de criar um recurso novo), então o risco de uma mensagem duplicada processada duas vezes aqui é
+baixo — ao contrário do risco que a deduplicação do primeiro Wait existe para evitar.
 
 ## Colunas de status e preço
 

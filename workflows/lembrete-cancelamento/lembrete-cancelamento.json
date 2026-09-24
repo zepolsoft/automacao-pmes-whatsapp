@@ -174,7 +174,7 @@
         "text": "=Nome do cliente: {{ $('Processar Cada Agendamento').item.json.nome }}\nServiço agendado: {{ $('Processar Cada Agendamento').item.json.servico }}\nData e hora atuais: {{ $now.toISO() }}\nData e hora do agendamento atual: {{ $('Processar Cada Agendamento').item.json.data }}\nResposta do cliente ao lembrete: {{ $json.resposta_cliente }}",
         "hasOutputParser": true,
         "options": {
-          "systemMessage": "Você classifica a resposta de um cliente a um lembrete de agendamento de uma barbearia em uma de quatro categorias:\n- \"confirmar\" — o cliente confirmou o horário\n- \"cancelar\" — o cliente não vai mais\n- \"remarcar\" — o cliente quer outro dia/horário\n- \"indefinido\" — resposta realmente ambígua ou que não indica nenhuma das anteriores\n\nREGRAS DE CLASSIFICAÇÃO (não mude esta lógica, só a redação da resposta ao cliente):\n- Se a resposta do cliente for apenas um emoji (ou combinação de emojis) sem texto, ou uma expressão curta de agradecimento/confirmação (ex: \"ok\", \"blz\", \"obrigado\", \"👍\", \"🙏\") — normalmente o cliente só está reconhecendo a mensagem, sem pedir cancelamento ou remarcação — trate como confirmação implícita do agendamento: decisao = \"confirmar\".\n- decisao = \"indefinido\" fica reservada só para respostas realmente ambíguas ou que não indicam confirmar/cancelar/remarcar de forma alguma — nunca para reações curtas como essas.\n- Se o cliente quiser remarcar e sugerir um novo dia/horário, converta para data e hora absolutas em ISO 8601 (novo_horario_inicio/novo_horario_fim), usando a data e hora atuais informadas como referência, assumindo 1 hora de duração.\n\nCONFIRMACAO_TEXTO — mensagem curta, natural e cordial em português para enviar ao cliente, como se um atendente de verdade estivesse digitando no WhatsApp. Escreva como uma frase corrida e espontânea, nunca como um formulário preenchido ou template com lacunas.\n\nVARIEDADE E TOM (vale para toda confirmacao_texto, em qualquer decisao):\n- Nunca repita a mesma estrutura de frase, a mesma palavra de abertura (\"Perfeito\", \"Combinado\", \"Prontinho\", \"Tudo bem\") ou a mesma ordem de informações em mensagens seguidas — varie a forma de começar e de organizar a frase a cada resposta, como uma pessoa de verdade escreveria. Os exemplos abaixo mostram só o formato esperado — nunca copie o texto deles literalmente.\n- Use o nome do cliente de forma natural, mas não é obrigatório em toda mensagem — um atendente de verdade não repete o nome do outro em cada frase. Priorize usar o nome ao confirmar algo importante ou ao acolher o cliente numa remarcação de última hora.\n- Seja especialmente acolhedor quando o cliente pede para remarcar em cima da hora (pouco tempo antes do horário já agendado) — reconheça a situação com empatia antes de confirmar, em vez de responder de forma seca.\n\nRegras por decisao:\n- decisao = \"confirmar\": confirme de forma calorosa e breve que o horário está garantido. Exemplos (varie entre estilos assim): \"Perfeito, te espero por aqui!\" / \"Combinado, {{ nome }}! Até já.\" / \"Show, contando com você!\" — inclusive quando a confirmação veio de um emoji ou \"ok\" (ex: \"Por nada, até lá! 😊\", \"Fico à disposição!\").\n- decisao = \"cancelar\": confirme o cancelamento de forma gentil, sem soar burocrático, e deixe claro que o cliente pode remarcar quando quiser. Exemplos: \"Tudo bem, cancelei aqui pra você. Quando quiser remarcar é só chamar!\" / \"Combinado, seu horário foi cancelado sem problema. Te espero quando quiser voltar.\"\n- decisao = \"remarcar\" e um novo horário foi identificado: escreva uma frase curta e natural confirmando o novo dia/horário por extenso em português (ex: \"quinta-feira, dia 19 de setembro, às 10h\"), incorporado numa frase fluida, não como um valor solto. Se o pedido for de última hora, reconheça isso com empatia antes de confirmar (ex.: \"Sem problema, dá tempo sim! Já ficou pra...\" em vez de só cravar a nova data/hora seca). Este texto só é enviado se o novo horário realmente estiver disponível — escreva como se fosse a confirmação final.\n- decisao = \"indefinido\": não gere confirmacao_texto de confirmação — este caso não usa o campo (a pergunta de esclarecimento ao cliente já é tratada por outro node do fluxo).\n\nSe não for possível classificar com clareza, responda decisao como \"indefinido\"."
+          "systemMessage": "Você classifica a resposta de um cliente a um lembrete de agendamento de uma barbearia em uma de quatro categorias:\n- \"confirmar\" — o cliente confirmou o horário\n- \"cancelar\" — o cliente não vai mais\n- \"remarcar\" — o cliente quer outro dia/horário\n- \"indefinido\" — resposta realmente ambígua ou que não indica nenhuma das anteriores\n\nREGRAS DE CLASSIFICAÇÃO (não mude esta lógica, só a redação da resposta ao cliente):\n- Se a resposta do cliente for apenas um emoji (ou combinação de emojis) sem texto, ou uma expressão curta de agradecimento/confirmação (ex: \"ok\", \"blz\", \"obrigado\", \"👍\", \"🙏\") — normalmente o cliente só está reconhecendo a mensagem, sem pedir cancelamento ou remarcação — trate como confirmação implícita do agendamento: decisao = \"confirmar\".\n- decisao = \"indefinido\" fica reservada só para respostas realmente ambíguas ou que não indicam confirmar/cancelar/remarcar de forma alguma — nunca para reações curtas como essas.\n- Se o cliente quiser remarcar e sugerir um novo dia/horário, converta para data e hora absolutas em ISO 8601 (novo_horario_inicio/novo_horario_fim), usando a data e hora atuais informadas como referência, assumindo 1 hora de duração.\n\nCONFIRMACAO_TEXTO — mensagem curta, natural e cordial em português para enviar ao cliente, como se um atendente de verdade estivesse digitando no WhatsApp. Escreva como uma frase corrida e espontânea, nunca como um formulário preenchido ou template com lacunas.\n\nVARIEDADE E TOM (vale para toda confirmacao_texto, em qualquer decisao):\n- Nunca repita a mesma estrutura de frase, a mesma palavra de abertura (\"Perfeito\", \"Combinado\", \"Prontinho\", \"Tudo bem\") ou a mesma ordem de informações em mensagens seguidas — varie a forma de começar e de organizar a frase a cada resposta, como uma pessoa de verdade escreveria. Os exemplos abaixo mostram só o formato esperado — nunca copie o texto deles literalmente.\n- Use o nome do cliente de forma natural, mas não é obrigatório em toda mensagem — um atendente de verdade não repete o nome do outro em cada frase. Priorize usar o nome ao confirmar algo importante ou ao acolher o cliente numa remarcação de última hora.\n- Seja especialmente acolhedor quando o cliente pede para remarcar em cima da hora (pouco tempo antes do horário já agendado) — reconheça a situação com empatia antes de confirmar, em vez de responder de forma seca.\n\nRegras por decisao:\n- decisao = \"confirmar\": confirme de forma calorosa e breve que o horário está garantido. Exemplos (varie entre estilos assim): \"Perfeito, te espero por aqui!\" / \"Combinado, {{ nome }}! Até já.\" / \"Show, contando com você!\" — inclusive quando a confirmação veio de um emoji ou \"ok\" (ex: \"Por nada, até lá! 😊\", \"Fico à disposição!\").\n- decisao = \"cancelar\": confirme o cancelamento de forma gentil, sem soar burocrático, e deixe claro que o cliente pode remarcar quando quiser. Exemplos: \"Tudo bem, cancelei aqui pra você. Quando quiser remarcar é só chamar!\" / \"Combinado, seu horário foi cancelado sem problema. Te espero quando quiser voltar.\"\n- decisao = \"remarcar\" e um novo horário foi identificado: escreva uma frase curta e natural PERGUNTANDO se pode confirmar a mudança para o novo dia/horário, por extenso em português (ex: \"quinta-feira, dia 19 de setembro, às 10h\"), incorporado numa frase fluida — NUNCA diga que já foi remarcado, você está só propondo, ainda falta o cliente confirmar numa mensagem separada. Se o pedido for de última hora, reconheça isso com empatia antes de perguntar (ex.: \"Sem problema, dá tempo sim! Ficaria pra quinta às 10h — posso confirmar?\" em vez de só cravar a nova data/hora seca). Este texto só é enviado se o novo horário realmente estiver disponível; a remarcação de fato só acontece depois que o cliente responder confirmando essa pergunta.\n- decisao = \"indefinido\": não gere confirmacao_texto de confirmação — este caso não usa o campo (a pergunta de esclarecimento ao cliente já é tratada por outro node do fluxo).\n\nSe não for possível classificar com clareza, responda decisao como \"indefinido\"."
         }
       },
       "onError": "continueRegularOutput"
@@ -443,10 +443,10 @@
     },
     {
       "id": "9efba61a-888a-4bfa-b56e-c77ccd4a5964",
-      "name": "Enviar Confirmação de Remarcação no WhatsApp",
+      "name": "Propor Remarcação no WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [3392, 608],
+      "position": [2944, 560],
       "webhookId": "286239af-fdfa-42ca-9e76-bb997eeb2973",
       "onError": "continueRegularOutput",
       "parameters": {
@@ -454,6 +454,150 @@
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
         "textBody": "={{ $('Classificar Resposta do Lembrete').item.json.output.confirmacao_texto }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "b8c9d0e1-1111-4fff-9aaa-111111111111",
+      "name": "Aguardar Confirmação da Remarcação",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [3168, 560],
+      "webhookId": "c1d2e3f4-1111-4a1a-8b1b-111111111111",
+      "parameters": {
+        "resume": "webhook",
+        "options": {},
+        "limitWaitTime": true,
+        "limitType": "afterTimeInterval",
+        "resumeAmount": 10,
+        "resumeUnit": "minutes"
+      }
+    },
+    {
+      "id": "b8c9d0e1-2222-4fff-9aaa-222222222222",
+      "name": "Cliente Confirmou a Remarcação ou Deu Timeout?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [3392, 560],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [{ "leftValue": "={{ $json.body?.messages?.[0]?.text?.body ?? $json.messages?.[0]?.text?.body ?? \"\" }}", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }, "rightValue": "" }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b8c9d0e1-3333-4fff-9aaa-333333333333",
+      "name": "Normalizar Confirmação da Remarcação",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [3616, 480],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            { "id": "resposta_confirmacao", "name": "resposta_confirmacao", "value": "={{ $json.body?.messages?.[0]?.text?.body ?? $json.messages?.[0]?.text?.body ?? \"\" }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b8c9d0e1-4444-4fff-9aaa-444444444444",
+      "name": "Classificar Confirmação da Remarcação",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [3840, 480],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "promptType": "define",
+        "text": "=Nome do cliente: {{ $('Processar Cada Agendamento').item.json.nome }}\nMensagem que você (atendente) acabou de enviar perguntando se pode confirmar a remarcação: {{ $('Classificar Resposta do Lembrete').item.json.output.confirmacao_texto }}\nNovo horário proposto (ISO): {{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}\nResposta do cliente a essa pergunta: {{ $json.resposta_confirmacao }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Você avalia se a resposta do cliente confirma ou não uma proposta de remarcação de horário que o atendente acabou de enviar pelo WhatsApp (mostrada acima como \"mensagem que você enviou\").\n\nRetorne:\n- confirmado: true se a resposta for afirmativa (ex.: \"sim\", \"pode\", \"confirma\", \"isso mesmo\", \"perfeito\", \"ok\", \"blz\", ou um emoji positivo como \"👍\") — trate reações curtas e informais como confirmação, já que o cliente está respondendo a uma pergunta direta de sim/não.\n- confirmado: false se a resposta for negativa (ex.: \"não\", \"deixa pra lá\", \"não quero mais\") OU se for algo completamente diferente/ambíguo que não responde à pergunta feita.\n\nconfirmacao_texto: mensagem curta, natural e calorosa em português, como um atendente de verdade estivesse digitando no WhatsApp:\n- Se confirmado = true: confirme definitivamente a remarcação, em tom caloroso (ex.: \"Prontinho! Remarcado. Até lá! 😊\").\n- Se confirmado = false: tranquilize o cliente de forma gentil, deixando claro que o horário ORIGINAL continua confirmado, sem remarcar nada (ex.: \"Sem problema! Mantive seu horário como estava.\").\nNunca repita sempre a mesma frase de abertura — varie a cada resposta."
+        }
+      }
+    },
+    {
+      "id": "b8c9d0e1-5555-4fff-9aaa-555555555555",
+      "name": "Modelo Claude para Confirmação da Remarcação",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [3800, 640],
+      "parameters": {
+        "model": { "__rl": true, "mode": "list", "value": "claude-sonnet-5", "cachedResultName": "Claude Sonnet 5" },
+        "options": { "temperature": 0.1 }
+      }
+    },
+    {
+      "id": "b8c9d0e1-6666-4fff-9aaa-666666666666",
+      "name": "Parser Estruturado de Confirmação da Remarcação",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [4000, 640],
+      "parameters": {
+        "jsonSchemaExample": "{ \"confirmado\": true, \"confirmacao_texto\": \"Prontinho! Remarcado pra sexta-feira, dia 19 de setembro, às 10h. Até lá! 😊\" }"
+      }
+    },
+    {
+      "id": "b8c9d0e1-7777-4fff-9aaa-777777777777",
+      "name": "Cliente Confirmou a Remarcação?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [4064, 480],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "leftValue": "={{ $('Classificar Confirmação da Remarcação').item.json.output.confirmado }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "b8c9d0e1-8888-4fff-9aaa-888888888888",
+      "name": "Avisar Remarcação Não Confirmada no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [4288, 640],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1367004446487242",
+        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "textBody": "={{ $('Classificar Confirmação da Remarcação').item.json.output.confirmacao_texto }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "b8c9d0e1-9999-4fff-9aaa-999999999999",
+      "name": "Avisar Timeout da Confirmação no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [3616, 700],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1367004446487242",
+        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const opcoes = [ `Oi` + (nome ? ` ${nome}` : '') + `! Não recebi sua confirmação sobre a remarcação, então mantive seu horário original como estava. Qualquer coisa, é só me chamar!`, (nome ? `${nome}, ` : ``) + `não vi sua resposta sobre a remarcação, então deixei seu horário original. Se ainda quiser mudar, é só falar comigo!` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "b8c9d0e1-aaaa-4fff-9aaa-aaaaaaaaaaaa",
+      "name": "Enviar Confirmação Final da Remarcação no WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [3392, 368],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1367004446487242",
+        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "textBody": "={{ $('Classificar Confirmação da Remarcação').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
     },
@@ -811,13 +955,33 @@
     "Verificar Novo Horário Disponível": { "main": [[{ "node": "Novo Horário Disponível?", "type": "main", "index": 0 }]] },
     "Novo Horário Disponível?": {
       "main": [
-        [{ "node": "Atualizar Evento no Calendar", "type": "main", "index": 0 }],
+        [{ "node": "Propor Remarcação no WhatsApp", "type": "main", "index": 0 }],
         [{ "node": "Pedir Outro Horário no WhatsApp", "type": "main", "index": 0 }]
       ]
     },
+    "Propor Remarcação no WhatsApp": { "main": [[{ "node": "Aguardar Confirmação da Remarcação", "type": "main", "index": 0 }]] },
+    "Aguardar Confirmação da Remarcação": { "main": [[{ "node": "Cliente Confirmou a Remarcação ou Deu Timeout?", "type": "main", "index": 0 }]] },
+    "Cliente Confirmou a Remarcação ou Deu Timeout?": {
+      "main": [
+        [{ "node": "Normalizar Confirmação da Remarcação", "type": "main", "index": 0 }],
+        [{ "node": "Avisar Timeout da Confirmação no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Normalizar Confirmação da Remarcação": { "main": [[{ "node": "Classificar Confirmação da Remarcação", "type": "main", "index": 0 }]] },
+    "Modelo Claude para Confirmação da Remarcação": { "ai_languageModel": [[{ "node": "Classificar Confirmação da Remarcação", "type": "ai_languageModel", "index": 0 }]] },
+    "Parser Estruturado de Confirmação da Remarcação": { "ai_outputParser": [[{ "node": "Classificar Confirmação da Remarcação", "type": "ai_outputParser", "index": 0 }]] },
+    "Classificar Confirmação da Remarcação": { "main": [[{ "node": "Cliente Confirmou a Remarcação?", "type": "main", "index": 0 }]] },
+    "Cliente Confirmou a Remarcação?": {
+      "main": [
+        [{ "node": "Atualizar Evento no Calendar", "type": "main", "index": 0 }],
+        [{ "node": "Avisar Remarcação Não Confirmada no WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
     "Atualizar Evento no Calendar": { "main": [[{ "node": "Atualizar Data na Planilha", "type": "main", "index": 0 }]] },
-    "Atualizar Data na Planilha": { "main": [[{ "node": "Enviar Confirmação de Remarcação no WhatsApp", "type": "main", "index": 0 }]] },
-    "Enviar Confirmação de Remarcação no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Atualizar Data na Planilha": { "main": [[{ "node": "Enviar Confirmação Final da Remarcação no WhatsApp", "type": "main", "index": 0 }]] },
+    "Enviar Confirmação Final da Remarcação no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Avisar Remarcação Não Confirmada no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
+    "Avisar Timeout da Confirmação no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Pedir Outro Horário no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Pedir Esclarecimento no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Marcar Atendimentos Concluídos às 22h": { "main": [[{ "node": "Buscar Todos os Agendamentos", "type": "main", "index": 0 }]] },

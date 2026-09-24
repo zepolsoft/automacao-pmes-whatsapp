@@ -757,6 +757,17 @@ da linha> : $json.output.servico`. Isso cobre os dois cenários: remarcar só o 
 serviço original (Calendar e planilha), e remarcar pedindo também outro serviço agora atualiza
 os dois lugares — antes só o Calendar mudava (de forma errada), a planilha nunca mudava.
 
+## Padronização de formato de data/hora (2026-09-24)
+
+`criado_em`/`atualizado_em` na planilha "Clientes - Automação PMEs" usavam `$now.toISO()`, que
+inclui milissegundos (ex.: `2026-09-24T13:45:18.557-03:00`) — diferente do formato da coluna
+`data`, que já vem sem milissegundos da IA (ex.: `2026-09-24T16:00:00-03:00`). Padronizado com
+`$now.toISO({ suppressMilliseconds: true })` nos 3 nodes que escrevem essas colunas
+(**Salvar Cliente na Planilha**, `criado_em`; **Atualizar Linha na Planilha** e **Atualizar
+Linha na Planilha (Cancelar)**, `atualizado_em`). Vale só pra escritas novas — linhas antigas na
+planilha não foram alteradas. Mesmo ajuste aplicado no workflow "Lembrete, Cancelamento e
+Remarcação".
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

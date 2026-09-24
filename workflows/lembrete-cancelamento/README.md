@@ -520,6 +520,18 @@ os dois pontos em produção. O caminho recomendado:
 Isso não foi implementado neste protótipo para manter o foco na estrutura e lógica principal —
 fica como próximo passo antes de ir para produção.
 
+## Padronização de formato de data/hora (2026-09-24)
+
+`criado_em`/`atualizado_em` na planilha "Clientes - Automação PMEs" usavam `$now.toISO()`, que
+inclui milissegundos (ex.: `2026-09-24T13:45:18.557-03:00`) — diferente do formato da coluna
+`data`, que já vem sem milissegundos da IA (ex.: `2026-09-24T16:00:00-03:00`). Padronizado com
+`$now.toISO({ suppressMilliseconds: true })` nos 3 nodes que escrevem `atualizado_em`
+(**Atualizar Status na Planilha (Cancelar)**, **Atualizar Data na Planilha**, **Marcar Como
+Concluído**). Vale só pra escritas novas — linhas antigas na planilha não foram alteradas.
+Mesmo ajuste aplicado no workflow "Agendamento via WhatsApp" (`criado_em` em **Salvar Cliente na
+Planilha**, `atualizado_em` em **Atualizar Linha na Planilha** e **Atualizar Linha na Planilha
+(Cancelar)**).
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

@@ -38,6 +38,7 @@ abaixo.
 | Interpretar Intenção do Cliente | AI Agent (Claude) — classifica intenção, extrai serviço/data/hora e escreve `confirmacao_texto` |
 | Corrigir Falsa Confirmação em Dúvida | Rede de segurança: impede a IA de "confirmar" algo sem checar disponibilidade de verdade |
 | Qual a Intenção do Cliente? | Switch que roteia para agendar / remarcar / cancelar / consultar / dúvida |
+| Tem Dados Completos Para Agendar? / Tem Novo Horário Para Remarcar? | Gates determinísticos: nada é criado/atualizado em Calendar/Sheets até ter serviço + data + horário completos |
 | Validar Horário de Funcionamento (+ Remarcar) | Code determinístico: rejeita horário fora de 9h-18h (seg-sáb) ou já passado |
 | Verificar Disponibilidade / Listar Eventos no Novo Horário (Remarcar) + Verificar Disponibilidade para Remarcar | Checagem real no Google Calendar (a de remarcar exclui o próprio evento do cliente da lista de conflitos) |
 | Criar Evento no Calendar / Atualizar Evento no Calendar / Cancelar Evento no Calendar | Efetiva a ação no Calendar |
@@ -261,31 +262,50 @@ então essa sincronização é manual e intencional, não automática.
    (node Limit, mantém só a última linha, assumindo que a planilha é preenchida em ordem
    cronológica) → **Encontrou Agendamento Para Remarcar?** (IF checando se `event_id` veio
    preenchido).
-   - **Não encontrou:** **Redirecionar para Fluxo de Agendar** (Code) → **Tem Data Para
-     Agendar?**, reentrando no mesmo caminho do branch "agendar" (ver "Remarcar sem
+   - **Não encontrou:** **Redirecionar para Fluxo de Agendar** (Code) → **Tem Dados Completos
+     Para Agendar?**, reentrando no mesmo caminho do branch "agendar" (ver "Remarcar sem
      agendamento existente" abaixo) — não envia mais aviso de "não encontrei" nem para o fluxo.
-   - **Encontrou:** **Validar Horário de Funcionamento (Remarcar)** (Code) → **Horário Dentro
-     do Expediente? (Remarcar)** (IF) — mesma validação determinística do fluxo de agendar,
-     aplicada ao novo `data_hora_inicio`/`data_hora_fim` da IA (ver "Horário de funcionamento"
-     abaixo).
-     - **Fora do expediente:** reaproveita o node "Avisar Horário Fora do Expediente no
-       WhatsApp" do fluxo de agendar, sem consultar o Calendar.
-     - **Dentro do expediente:** **Listar Eventos no Novo Horário (Remarcar)** (Google Calendar,
-       `resource: event`, `getAll`, lista os eventos que colidem com o novo horário) →
-       **Verificar Disponibilidade para Remarcar** (Code, filtra da lista o evento cujo `id`
-       é igual ao `event_id` já salvo do próprio cliente antes de decidir `available` — ver
-       "Remarcar para horário próximo do atual" abaixo) → **Novo Horário Disponível?**
-     - **Sim:** **Atualizar Evento no Calendar** (`update`, usando o `event_id` encontrado) →
-       **Atualizar Linha na Planilha** (`update`, casando pela coluna `event_id`, atualizando
-       `servico`, `data`, `status: "remarcado"`, `preco` recalculado e `atualizado_em`) →
-       confirma a remarcação no WhatsApp.
-     - **Não:** reaproveita o node "Sugerir Outro Horário no WhatsApp" do fluxo de agendar.
+   - **Encontrou:** **Tem Novo Horário Para Remarcar?** (IF checando `data_hora_inicio`
+     notEmpty — ver "Bug corrigido" abaixo).
+     - **Não** (cliente ainda não disse pra quando quer remarcar): reaproveita "Responder
+       Dúvida no WhatsApp" perguntando o novo dia/horário, sem tocar em Calendar/planilha.
+     - **Sim:** **Validar Horário de Funcionamento (Remarcar)** (Code) → **Horário Dentro
+       do Expediente? (Remarcar)** (IF) — mesma validação determinística do fluxo de agendar,
+       aplicada ao novo `data_hora_inicio`/`data_hora_fim` da IA (ver "Horário de funcionamento"
+       abaixo).
+       - **Fora do expediente:** reaproveita o node "Avisar Horário Fora do Expediente no
+         WhatsApp" do fluxo de agendar, sem consultar o Calendar.
+       - **Dentro do expediente:** **Listar Eventos no Novo Horário (Remarcar)** (Google
+         Calendar, `resource: event`, `getAll`, lista os eventos que colidem com o novo
+         horário) → **Verificar Disponibilidade para Remarcar** (Code, filtra da lista o
+         evento cujo `id` é igual ao `event_id` já salvo do próprio cliente antes de decidir
+         `available` — ver "Remarcar para horário próximo do atual" abaixo) → **Novo Horário
+         Disponível?**
+       - **Sim:** **Atualizar Evento no Calendar** (`update`, usando o `event_id` encontrado)
+         → **Atualizar Linha na Planilha** (`update`, casando pela coluna `event_id`,
+         atualizando `data`, `status: "remarcado"` e `atualizado_em` — `servico`/`preco`/
+         `criado_em` são reescritos sem alterar, ver "Colunas de status e preço" abaixo) →
+         confirma a remarcação no WhatsApp.
+       - **Não:** reaproveita o node "Sugerir Outro Horário no WhatsApp" do fluxo de agendar.
 
    > **Bug corrigido (2026-09-22):** o node "Confirmar Remarcação no WhatsApp" tinha um texto
    > fixo ("Prontinho! Sua remarcação ficou assim: ... Até lá! 😊") envolvendo o
    > `confirmacao_texto` gerado pela IA — que já é uma frase completa e natural. Isso duplicava
    > a mensagem. O campo passou a usar apenas `{{ confirmacao_texto }}`, igual ao node
    > "Responder Dúvida no WhatsApp".
+
+   > **Bug crítico corrigido (2026-09-24):** cliente mandou só "Quero remarcar", sem dizer
+   > pra quando. Sem nenhum gate, o item seguia direto para "Validar Horário de Funcionamento
+   > (Remarcar)" com `data_hora_inicio` vazio — o Code calculava `dentro_do_expediente: false`
+   > (data inválida) e caía em "Avisar Horário Fora do Expediente no WhatsApp", que **falhou**
+   > (`"Bad request"`, capturado pelo Error Workflow): esse node específico tinha o
+   > `phoneNumberId` com o valor placeholder do template em vez do real (único entre os 8 nodes
+   > de WhatsApp com esse problema — não tinha relação com a expressão da mensagem, que já era
+   > seguro contra campos vazios). Corrigidas as duas causas: 1) `phoneNumberId` do node
+   > ajustado para o valor real; 2) novo node **"Tem Novo Horário Para Remarcar?"** inserido
+   > entre "Encontrou Agendamento Para Remarcar?" e a validação de horário, garantindo que
+   > "remarcar sem dizer quando" pare em "Responder Dúvida no WhatsApp" pedindo a data, sem
+   > nunca chegar perto da validação de expediente ou do Calendar.
 
 ### Saída "cancelar"
 

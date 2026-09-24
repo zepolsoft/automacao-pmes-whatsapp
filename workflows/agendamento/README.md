@@ -33,7 +33,7 @@ abaixo.
 | Filtrar Apenas Mensagens | Descarta eventos de status (entrega/leitura), só deixa passar mensagens de texto reais |
 | Normalizar Dados da Mensagem | Extrai telefone, nome, texto e `message_id` do payload |
 | Checar Mensagem Duplicada / Mensagem Já Processada? / Registrar Mensagem Processada | Deduplicação por `message_id` (ver "Regras de negócio" abaixo) |
-| Checar Lock do Telefone / Telefone Ocupado? / Registrar Lock do Telefone | Lock de 30s por telefone, evita execuções paralelas do mesmo cliente |
+| Checar Lock do Telefone / Telefone Ocupado? / Registrar Lock do Telefone | Lock de 10s por telefone, evita execuções paralelas do mesmo cliente |
 | Buscar Serviços e Preços / Formatar Lista de Serviços | Lê a planilha de serviços e monta o texto injetado no prompt da IA |
 | Interpretar Intenção do Cliente | AI Agent (Claude) — classifica intenção, extrai serviço/data/hora e escreve `confirmacao_texto` |
 | Corrigir Falsa Confirmação em Dúvida | Rede de segurança: impede a IA de "confirmar" algo sem checar disponibilidade de verdade |
@@ -79,7 +79,7 @@ na seção "Colunas de status e preço na planilha" mais abaixo.
   tratado como inválido, mesma seção acima (`jaPassou`).
 - **Deduplicação de mensagens** por `message_id` (wamid) — ver "Robustez: deduplicação, lock
   por telefone e data no passado" abaixo.
-- **Lock por telefone** (30s) — evita duas execuções paralelas do mesmo cliente, mesma seção.
+- **Lock por telefone** (10s) — evita duas execuções paralelas do mesmo cliente, mesma seção.
 - **Nunca confirmar sem checar disponibilidade real** — ver seção dedicada abaixo.
 - **Agendar vs. remarcar vs. cancelar vs. consultar** distinguidos por regras explícitas no
   prompt da IA — ver "REGRA CRÍTICA — AGENDAR VS REMARCAR" e "REGRA — CONSULTAR VS DÚVIDA VS
@@ -531,6 +531,41 @@ escreve nada) de **execução** (só depois do "sim" do cliente):
 Isso vale simetricamente para **agendar** e **remarcar** — os dois passam pelo mesmo padrão de
 gate, cada um com seu próprio IF de confirmação, mas compartilhando o node de proposta.
 
+### Bug: lock de telefone bloqueando a confirmação (2026-09-24)
+
+Primeiro teste ao vivo do fluxo acima: cliente pediu corte amanhã às 15h, recebeu a pergunta de
+confirmação, respondeu "Pode!" — e nada aconteceu (sem evento novo no Calendar, sem linha na
+planilha, sem mensagem final). Investigando as execuções (`search_workflow_executions` /
+`get_workflow_execution`):
+
+- A pergunta de confirmação ("E as 15h?") foi processada corretamente — disponibilidade
+  checada, `confirmado: false`, mensagem de proposta enviada.
+- A resposta "Pode!" chegou ~26s depois. Como cada mensagem reentra do zero pelo trigger
+  (**Receber Mensagem WhatsApp** → dedup → lock), ela caiu de novo em **Checar Lock do
+  Telefone** / **Telefone Ocupado?** — e como o lock da mensagem anterior ainda estava dentro da
+  janela de 30s, **Telefone Ocupado?** deu `true` e a mensagem foi descartada em **Ignorar
+  Mensagem (Telefone Ocupado)**, sem nunca chegar na IA, no Calendar ou na planilha.
+- Confirmado lendo Calendar/planilha diretamente (workflow utilitário descartável): nenhum
+  evento novo, nenhuma linha nova — o evento "16h" que pareceu ter sido criado era um evento de
+  teste antigo (`corte de cabelo - José Teste`, criado em 2026-09-18, sem linha correspondente
+  na planilha e com `timeZone: America/New_York` — anômalo, de um teste manual anterior), não
+  algo gerado por este teste. Ou seja: não havia bug de fuso horário no node **Criar Evento no
+  Calendar** (que não foi alterado por esta mudança — continua usando
+  `data_hora_inicio`/`data_hora_fim` da IA, já em ISO com offset `-03:00`, direto em `start`/
+  `end`); o horário "errado" observado era um evento antigo sendo confundido com o novo teste.
+
+**Causa raiz:** a janela de 30s do lock foi dimensionada só para cobrir a duração de uma única
+execução (seção "Robustez" abaixo). Ela não previa que o próprio fluxo passaria a exigir uma
+segunda mensagem do cliente (a confirmação) pouco depois da primeira — e uma resposta rápida a
+"posso confirmar?" cai naturalmente dentro de qualquer janela de trinta segundos.
+
+**Correção:** janela reduzida de 30s para 10s em **Telefone Ocupado?** — ainda cobre a duração
+real observada de uma execução (~3-11s) para o propósito original (evitar duas execuções
+paralelas do mesmo número), mas não bloqueia mais uma resposta humana normal a uma pergunta de
+confirmação. O fluxo de **remarcar** no workflow "Lembrete, Cancelamento e Remarcação" não sofre
+desse problema: a segunda etapa de confirmação lá usa um node Wait nativo (resume por webhook),
+que retoma direto no meio do fluxo sem passar de novo pelo dedup/lock.
+
 ## Planilha de serviços e preços
 
 Nova planilha: **[Serviços - Barbearia](https://docs.google.com/spreadsheets/d/1fOA2tNHYHJPMlk4SKZfBJlm5E0BXWiDppYPfSiPI0sc/edit)**
@@ -624,13 +659,17 @@ chamada à IA, planilha ou Calendar.
    seguidas bem rápidas) escrevendo ao mesmo tempo na planilha/Calendar. Logo depois de registrar
    a mensagem como processada, usando uma segunda Data Table (`locks_telefone`):
    - **Checar Lock do Telefone** (`get`, filtro por `telefone`) → **Telefone Ocupado?** (IF:
-     existe `bloqueado_em` com menos de 30 segundos?)
+     existe `bloqueado_em` com menos de 10 segundos?)
      - **Sim:** **Ignorar Mensagem (Telefone Ocupado)** (NoOp) — encerra sem responder.
      - **Não:** **Registrar Lock do Telefone** (`upsert`, grava `telefone` + `bloqueado_em: agora`)
        → segue para **Buscar Serviços e Preços**.
-   - Janela de 30s fixa, sem node de "unlock" no final — decisão deliberada para manter o fluxo
+   - Janela fixa, sem node de "unlock" no final — decisão deliberada para manter o fluxo
      simples; suficiente para cobrir a duração normal de uma execução, mesmo sabendo que uma
-     execução anormalmente lenta (>30s) deixaria uma segunda mensagem passar.
+     execução anormalmente lenta deixaria uma segunda mensagem passar. Reduzida de 30s para 10s
+     em 2026-09-24 (ver "Bug: lock de telefone bloqueando confirmação" abaixo) — o valor original
+     foi escolhido pensando só em cobrir a duração de UMA execução; ela nunca tinha em mente que o
+     próprio fluxo passaria a exigir uma SEGUNDA mensagem do cliente (a confirmação) minutos ou
+     segundos depois.
 3. **Validação de data no passado** — os nodes **Validar Horário de Funcionamento** e **Validar
    Horário de Funcionamento (Remarcar)** ganharam uma condição `jaPassou` (compara o horário
    pedido com `DateTime.now().setZone('America/Sao_Paulo')`). Um horário dentro do expediente
@@ -645,7 +684,7 @@ Remarcação" (mesmo `dataTableId` nos dois):
 | tabela | colunas | uso |
 |---|---|---|
 | `mensagens_processadas` | `message_id`, `processado_em` | deduplicação de webhooks reentregues |
-| `locks_telefone` | `telefone`, `bloqueado_em` | lock de 30s para evitar execuções paralelas do mesmo número |
+| `locks_telefone` | `telefone`, `bloqueado_em` | lock de 10s para evitar execuções paralelas do mesmo número |
 
 > **Bug crítico corrigido (2026-09-24):** a partir do deploy desta rodada (23/09 20h56 UTC), o
 > workflow parou de responder **qualquer** mensagem recebida, a qualquer hora do dia — não só

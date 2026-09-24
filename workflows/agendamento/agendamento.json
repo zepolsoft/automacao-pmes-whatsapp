@@ -132,7 +132,7 @@
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
           "combinator": "and",
-          "conditions": [{ "leftValue": "={{ $json.bloqueado_em ? (DateTime.fromISO($json.bloqueado_em) > DateTime.now().minus({ seconds: 30 })) : false }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }]
+          "conditions": [{ "leftValue": "={{ $json.bloqueado_em ? (DateTime.fromISO($json.bloqueado_em) > DateTime.now().minus({ seconds: 10 })) : false }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }]
         },
         "options": {}
       }

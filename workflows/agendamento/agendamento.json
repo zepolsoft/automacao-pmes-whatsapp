@@ -509,6 +509,25 @@
       }
     },
     {
+      "id": "f6a7b8c9-2222-4ddd-9eee-222222222222",
+      "name": "Filtrar Agendamento Ativo (Remarcar)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [1616, 650],
+      "alwaysOutputData": true,
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "combinator": "or",
+          "conditions": [
+            { "leftValue": "={{ $json.status }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "agendado" },
+            { "leftValue": "={{ $json.status }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "remarcado" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
       "id": "ffa2ca76-42ba-496a-baec-4cd20cf3ffb8",
       "name": "Selecionar Agendamento Mais Recente (Remarcar)",
       "type": "n8n-nodes-base.limit",
@@ -696,6 +715,25 @@
         "sheetName": { "__rl": true, "mode": "list", "value": "", "cachedResultName": "Agendamentos" },
         "filtersUI": { "values": [{ "lookupColumn": "telefone", "lookupValue": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}" }] },
         "options": { "returnAllMatches": "returnAllMatches" }
+      }
+    },
+    {
+      "id": "f6a7b8c9-3333-4ddd-9eee-333333333333",
+      "name": "Filtrar Agendamento Ativo (Cancelar)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [1616, 900],
+      "alwaysOutputData": true,
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "combinator": "or",
+          "conditions": [
+            { "leftValue": "={{ $json.status }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "agendado" },
+            { "leftValue": "={{ $json.status }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "remarcado" }
+          ]
+        },
+        "options": {}
       }
     },
     {
@@ -934,7 +972,8 @@
     },
     "Criar Evento no Calendar": { "main": [[{ "node": "Salvar Cliente na Planilha", "type": "main", "index": 0 }]] },
     "Salvar Cliente na Planilha": { "main": [[{ "node": "Confirmar Agendamento no WhatsApp", "type": "main", "index": 0 }]] },
-    "Buscar Agendamento para Remarcar": { "main": [[{ "node": "Selecionar Agendamento Mais Recente (Remarcar)", "type": "main", "index": 0 }]] },
+    "Buscar Agendamento para Remarcar": { "main": [[{ "node": "Filtrar Agendamento Ativo (Remarcar)", "type": "main", "index": 0 }]] },
+    "Filtrar Agendamento Ativo (Remarcar)": { "main": [[{ "node": "Selecionar Agendamento Mais Recente (Remarcar)", "type": "main", "index": 0 }]] },
     "Selecionar Agendamento Mais Recente (Remarcar)": { "main": [[{ "node": "Encontrou Agendamento Para Remarcar?", "type": "main", "index": 0 }]] },
     "Encontrou Agendamento Para Remarcar?": {
       "main": [
@@ -966,7 +1005,8 @@
     },
     "Atualizar Evento no Calendar": { "main": [[{ "node": "Atualizar Linha na Planilha", "type": "main", "index": 0 }]] },
     "Atualizar Linha na Planilha": { "main": [[{ "node": "Confirmar Remarcação no WhatsApp", "type": "main", "index": 0 }]] },
-    "Buscar Agendamento para Cancelar": { "main": [[{ "node": "Selecionar Agendamento Mais Recente (Cancelar)", "type": "main", "index": 0 }]] },
+    "Buscar Agendamento para Cancelar": { "main": [[{ "node": "Filtrar Agendamento Ativo (Cancelar)", "type": "main", "index": 0 }]] },
+    "Filtrar Agendamento Ativo (Cancelar)": { "main": [[{ "node": "Selecionar Agendamento Mais Recente (Cancelar)", "type": "main", "index": 0 }]] },
     "Selecionar Agendamento Mais Recente (Cancelar)": { "main": [[{ "node": "Encontrou Agendamento Para Cancelar?", "type": "main", "index": 0 }]] },
     "Encontrou Agendamento Para Cancelar?": {
       "main": [

@@ -41,6 +41,7 @@ abaixo.
 | Tem Dados Completos Para Agendar? / Tem Novo Horário Para Remarcar? | Gates determinísticos: nada é criado/atualizado em Calendar/Sheets até ter serviço + data + horário completos |
 | Validar Horário de Funcionamento (+ Remarcar) | Code determinístico: rejeita horário fora de 9h-18h (seg-sáb) ou já passado |
 | Verificar Disponibilidade / Listar Eventos no Novo Horário (Remarcar) + Verificar Disponibilidade para Remarcar | Checagem real no Google Calendar (a de remarcar exclui o próprio evento do cliente da lista de conflitos) |
+| Filtrar Agendamento Ativo (Remarcar) / (Cancelar) | Mantém só linhas `agendado`/`remarcado` antes de escolher "o" agendamento do cliente — evita pegar uma linha já concluída/cancelada |
 | Criar Evento no Calendar / Atualizar Evento no Calendar / Cancelar Evento no Calendar | Efetiva a ação no Calendar |
 | Salvar Cliente na Planilha / Atualizar Linha na Planilha / Atualizar Linha na Planilha (Cancelar) | Grava o resultado na planilha "Clientes - Automação PMEs" |
 | Confirmar Agendamento / Confirmar Remarcação / Confirmar Cancelamento / Responder Dúvida / Sugerir Outro Horário / Avisar Horário Fora do Expediente / Avisar Sem Agendamento Ativo no WhatsApp | Respostas ao cliente (ver "Sincronização de tom" abaixo sobre como são escritas) |
@@ -258,10 +259,11 @@ então essa sincronização é manual e intencional, não automática.
 ### Saída "remarcar"
 
 9. **Buscar Agendamento para Remarcar** — Google Sheets (`read`, com filtro por `telefone`,
-   retornando todas as linhas que baterem) → **Selecionar Agendamento Mais Recente (Remarcar)**
-   (node Limit, mantém só a última linha, assumindo que a planilha é preenchida em ordem
-   cronológica) → **Encontrou Agendamento Para Remarcar?** (IF checando se `event_id` veio
-   preenchido).
+   retornando todas as linhas que baterem) → **Filtrar Agendamento Ativo (Remarcar)** (Filter,
+   mantém só linhas com `status: "agendado"` ou `"remarcado"`, `alwaysOutputData: true` — ver
+   "Bug corrigido" abaixo) → **Selecionar Agendamento Mais Recente (Remarcar)** (node Limit,
+   mantém só a última linha ativa) → **Encontrou Agendamento Para Remarcar?** (IF checando se
+   `event_id` veio preenchido).
    - **Não encontrou:** **Redirecionar para Fluxo de Agendar** (Code) → **Tem Dados Completos
      Para Agendar?**, reentrando no mesmo caminho do branch "agendar" (ver "Remarcar sem
      agendamento existente" abaixo) — não envia mais aviso de "não encontrei" nem para o fluxo.
@@ -307,10 +309,23 @@ então essa sincronização é manual e intencional, não automática.
    > "remarcar sem dizer quando" pare em "Responder Dúvida no WhatsApp" pedindo a data, sem
    > nunca chegar perto da validação de expediente ou do Calendar.
 
+   > **Bug crítico corrigido (2026-09-24, mesmo dia):** testando o fix acima, "Quero
+   > remarcar" fez o sistema selecionar como "o agendamento do cliente" uma linha **já
+   > concluída** de um teste anterior, em vez do corte ativo das 16h — porque "Selecionar
+   > Agendamento Mais Recente (Remarcar)" só pega a última linha da planilha por telefone,
+   > sem olhar o `status`. Se o cliente tem mais de uma linha e a mais recente por ordem de
+   > inserção não é a ativa, o sistema mexeria no evento/linha errados. Corrigido inserindo
+   > **"Filtrar Agendamento Ativo (Remarcar)"** antes do Limit, mantendo só linhas
+   > `agendado`/`remarcado`. Verificado com um teste isolado direto na planilha real antes de
+   > aplicar: com o filtro, a linha selecionada para o telefone de teste passou a ser
+   > corretamente a ativa, não a concluída.
+
 ### Saída "cancelar"
 
-9. **Buscar Agendamento para Cancelar** / **Selecionar Agendamento Mais Recente (Cancelar)** /
-   **Encontrou Agendamento Para Cancelar?** — mesma lógica de busca do fluxo de remarcar.
+9. **Buscar Agendamento para Cancelar** — Google Sheets (`read`, filtro por `telefone`) →
+   **Filtrar Agendamento Ativo (Cancelar)** (Filter, mesma lógica e mesmo bug corrigido do
+   branch "remarcar" acima) → **Selecionar Agendamento Mais Recente (Cancelar)** →
+   **Encontrou Agendamento Para Cancelar?**.
    - **Não encontrou:** reaproveita o node que avisa que não há agendamento ativo.
    - **Encontrou:** **Cancelar Evento no Calendar** (`delete`, usando o `event_id`) →
      **Atualizar Linha na Planilha (Cancelar)** (`update`, casando pela coluna `event_id`,

@@ -791,6 +791,32 @@ credential Anthropic): retornou `intencao: "duvida"`, `confirmado: false`,
 remarcar ou cancelar um horário."` — confirmando o comportamento esperado sem precisar de uma
 mensagem real via WhatsApp.
 
+## Indicador de "digitando..." (2026-09-24)
+
+Novo node **Ativar Indicador de Digitação** logo depois de **Registrar Lock do Telefone**,
+antes de **Buscar Serviços e Preços**/IA — marca a mensagem recebida como lida e ativa
+"digitando..." no WhatsApp do cliente enquanto o resto do fluxo processa (busca de serviços,
+IA, Calendar, planilha).
+
+O node nativo do WhatsApp Business Cloud (`n8n-nodes-base.whatsApp`) só tem operações de
+`send`/`sendAndWait`/`sendTemplate`/mídia — não expõe `markAsRead`/`typing_indicator`. Por isso
+é um **HTTP Request** chamando a Graph API diretamente:
+
+```
+POST https://graph.facebook.com/v21.0/{phone-number-id}/messages
+{ "messaging_product": "whatsapp", "status": "read", "message_id": "<message_id>",
+  "typing_indicator": { "type": "text" } }
+```
+
+- Autenticação via `authentication: predefinedCredentialType` + `nodeCredentialType:
+  whatsAppApi`, reaproveitando a mesma credencial dos nodes de envio (token gerenciado pelo
+  n8n, não hardcoded no node).
+- `message_id` vem de `Normalizar Dados da Mensagem` (mesmo campo usado pela deduplicação).
+- Não trava o fluxo se falhar: `onError: continueRegularOutput` no node + `neverError: true`
+  na resposta — é só efeito visual, não crítico.
+- O indicador some sozinho quando a mensagem de resposta final é enviada (ou depois de ~25s),
+  sem precisar de node de "desligar".
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

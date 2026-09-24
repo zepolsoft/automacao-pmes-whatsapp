@@ -875,6 +875,25 @@
       }
     },
     {
+      "id": "b3dca74f-0127-4117-9ba4-3e294440bbc7",
+      "name": "Ativar Indicador de Digitação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [2144, 780],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1367004446487242/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"messaging_product\": \"whatsapp\", \"status\": \"read\", \"message_id\": $json.message_id, \"typing_indicator\": { \"type\": \"text\" } } }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      }
+    },
+    {
       "id": "e1d6f8b2-5b2c-4b2c-9d3e-b2c3d4e5f6a7",
       "name": "Sticky Note README",
       "type": "n8n-nodes-base.stickyNote",
@@ -926,7 +945,8 @@
       ]
     },
     "Ignorar Mensagem (Telefone Ocupado)": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
-    "Registrar Lock do Telefone": { "main": [[{ "node": "Classificar Resposta do Lembrete", "type": "main", "index": 0 }]] },
+    "Registrar Lock do Telefone": { "main": [[{ "node": "Ativar Indicador de Digitação", "type": "main", "index": 0 }]] },
+    "Ativar Indicador de Digitação": { "main": [[{ "node": "Classificar Resposta do Lembrete", "type": "main", "index": 0 }]] },
     "Classificar Resposta do Lembrete": { "main": [[{ "node": "Confirmar, Cancelar ou Remarcar?", "type": "main", "index": 0 }]] },
     "Modelo Claude para Classificação": { "ai_languageModel": [[{ "node": "Classificar Resposta do Lembrete", "type": "ai_languageModel", "index": 0 }]] },
     "Simple Memory": { "ai_memory": [[{ "node": "Classificar Resposta do Lembrete", "type": "ai_memory", "index": 0 }]] },

@@ -543,6 +543,20 @@ classificação mudou. Uma pergunta como "qual seu nome?" nesse contexto (respos
 continua caindo em `decisao = "indefinido"`, tratada pelo node estático já existente **Pedir
 Esclarecimento no WhatsApp** — fora do escopo desta mudança.
 
+## Indicador de "digitando..." (2026-09-24)
+
+Mesma mudança do workflow "Agendamento via WhatsApp": novo node **Ativar Indicador de
+Digitação** (HTTP Request, POST direto na Graph API — o node nativo do WhatsApp não expõe
+`markAsRead`/`typing_indicator`) logo depois de **Registrar Lock do Telefone**, antes de
+**Classificar Resposta do Lembrete** (IA). Marca a resposta do cliente ao lembrete como lida e
+ativa "digitando..." enquanto a IA classifica confirmar/cancelar/remarcar. Mesma credencial
+`whatsAppApi` dos nodes de envio, `onError: continueRegularOutput` + `neverError: true` pra não
+travar o fluxo se a chamada falhar.
+
+Não aplicado à etapa de confirmação da remarcação (**Aguardar Confirmação da Remarcação** →
+**Classificar Confirmação da Remarcação**), que não tem seu próprio dedup/lock (decisão
+deliberada, ver "Robustez" abaixo) — fora do escopo desta mudança.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

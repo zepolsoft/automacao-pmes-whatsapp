@@ -171,6 +171,25 @@
       }
     },
     {
+      "id": "87b59fbb-0fc3-4d99-b4f8-bce8a5492fca",
+      "name": "Ativar Indicador de Digitação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [1648, 1080],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/<__PLACEHOLDER_VALUE__ID do número de telefone WhatsApp Business__>/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"messaging_product\": \"whatsapp\", \"status\": \"read\", \"message_id\": $json.message_id, \"typing_indicator\": { \"type\": \"text\" } } }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      }
+    },
+    {
       "id": "f0404783-1c64-4dee-a8b4-f14d3c9bf0ca",
       "name": "Buscar Serviços e Preços",
       "type": "n8n-nodes-base.googleSheets",
@@ -974,7 +993,8 @@
         [{ "node": "Registrar Lock do Telefone", "type": "main", "index": 0 }]
       ]
     },
-    "Registrar Lock do Telefone": { "main": [[{ "node": "Buscar Serviços e Preços", "type": "main", "index": 0 }]] },
+    "Registrar Lock do Telefone": { "main": [[{ "node": "Ativar Indicador de Digitação", "type": "main", "index": 0 }]] },
+    "Ativar Indicador de Digitação": { "main": [[{ "node": "Buscar Serviços e Preços", "type": "main", "index": 0 }]] },
     "Buscar Serviços e Preços": { "main": [[{ "node": "Formatar Lista de Serviços", "type": "main", "index": 0 }]] },
     "Formatar Lista de Serviços": { "main": [[{ "node": "Interpretar Intenção do Cliente", "type": "main", "index": 0 }]] },
     "Interpretar Intenção do Cliente": { "main": [[{ "node": "Corrigir Falsa Confirmação em Dúvida", "type": "main", "index": 0 }]] },

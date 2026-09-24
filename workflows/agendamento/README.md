@@ -198,10 +198,11 @@ então essa sincronização é manual e intencional, não automática.
 
 ### Saída "agendar"
 
-9. **Tem Data Para Agendar?**
-   - **Sim:** a IA extraiu `data_hora_inicio` → segue para validar o horário de funcionamento.
-   - **Não:** "agendar" sem data extraída → responde no WhatsApp com o `confirmacao_texto`
-     da IA pedindo esclarecimento, sem tentar consultar o Calendar com uma data vazia.
+9. **Tem Dados Completos Para Agendar?** (renomeado em 2026-09-24, ver "Bug corrigido" abaixo)
+   - **Sim** (intenção = agendar, `data_hora_inicio` presente E `servico` diferente de "não
+     especificado"): segue para validar o horário de funcionamento.
+   - **Não** (falta data OU falta serviço): responde no WhatsApp com o `confirmacao_texto`
+     da IA pedindo o que falta, sem tocar em Calendar ou planilha.
 10. **Validar Horário de Funcionamento** (Code) → **Horário Dentro do Expediente?** (IF) —
    validação determinística, independente do prompt da IA (ver "Horário de funcionamento"
    abaixo).
@@ -222,6 +223,36 @@ então essa sincronização é manual e intencional, não automática.
    > Isso duplicava a mensagem. O campo passou a usar apenas `{{ confirmacao_texto }}`, igual
    > aos outros nodes de confirmação. Os nodes "Sugerir Outro Horário no WhatsApp" e "Responder
    > Dúvida no WhatsApp" foram revisados e não tinham esse problema.
+
+   > **Bug crítico corrigido (2026-09-24):** cliente pediu para reagendar um horário existente
+   > ("Queria reagendar meu horário das 16h para às 11h") sem repetir o serviço na mesma
+   > mensagem. A IA classificou como `intencao = "agendar"` (a REGRA CRÍTICA só permitia
+   > `"remarcar"` com confirmação nesta conversa, e esse era um agendamento de uma conversa
+   > anterior) com `servico = "não especificado"`, e o antigo **"Tem Data Para Agendar?"** só
+   > checava `data_hora_inicio` — nunca `servico` — deixando passar: o sistema **criou um
+   > evento novo no Calendar e uma linha nova na planilha** com `servico: "não especificado"`
+   > às 11h, sem tocar no agendamento real das 16h. Ao informar o serviço depois, o cliente foi
+   > informado que o horário "já estava ocupado" — na verdade em conflito com o próprio evento
+   > fantasma recém-criado.
+   >
+   > Corrigido em duas camadas:
+   > 1. **"Tem Data Para Agendar?"** renomeado para **"Tem Dados Completos Para Agendar?"** e
+   >    ganhou uma 3ª condição: `servico` diferente de `"não especificado"`. Agora nada é
+   >    criado nem atualizado até ter serviço + data + horário completos na mesma classificação.
+   > 2. **REGRA CRÍTICA — AGENDAR VS REMARCAR** relaxada: antes só permitia `"remarcar"` com
+   >    confirmação enviada NESTA conversa — o que forçava `"agendar"` sempre que um cliente
+   >    recorrente pedia para reagendar algo marcado numa conversa anterior. Agora classifica
+   >    `"remarcar"` sempre que o cliente claramente se refere a mudar um horário já marcado
+   >    (palavras como "reagendar", "remarcar", "mudar/trocar meu horário"), mesmo sem
+   >    confirmação nesta conversa — confiando na rede de segurança já existente
+   >    (`"Encontrou Agendamento Para Remarcar?"` → `"Redirecionar para Fluxo de Agendar"`,
+   >    ver "Remarcar sem agendamento existente" abaixo) para os casos em que a IA erra e não
+   >    existe agendamento real: o sistema redireciona sozinho para o fluxo de agendar, sem
+   >    travar o cliente.
+   >
+   > O registro incorreto criado por esse bug (evento do Calendar + linha da planilha) foi
+   > removido manualmente antes da correção; o agendamento real das 16h foi conferido e
+   > permaneceu intacto durante toda a investigação.
 
 ### Saída "remarcar"
 
@@ -284,8 +315,9 @@ então essa sincronização é manual e intencional, não automática.
 
 ### Saída "duvida" (fallback)
 
-9. **Responder Dúvida no WhatsApp** — mesmo node reaproveitado pelo "Tem Data Para Agendar?"
-   (agendar sem data): responde com o `confirmacao_texto` gerado pela IA. Também é usado quando
+9. **Responder Dúvida no WhatsApp** — mesmo node reaproveitado pelo "Tem Dados Completos Para
+   Agendar?" (agendar sem data ou sem serviço): responde com o `confirmacao_texto` gerado pela
+   IA. Também é usado quando
    o cliente pergunta sobre serviços/preços — a IA responde com base na `lista_servicos`.
 
 ## Horário de funcionamento
@@ -363,7 +395,7 @@ fora desse horário em duas camadas independentes:
 > reconstrói o item no formato `{ output: { ...dados já extraídos pela IA nesta execução,
 > intencao: "agendar" } }` — reaproveitando `servico`, `nome_cliente`, `data_hora_inicio`,
 > `data_hora_fim` e `confirmacao_texto` que a IA já tinha extraído, só forçando `intencao` para
-> `"agendar"`. Esse item é conectado direto em **"Tem Data Para Agendar?"** — a mesma entrada
+> `"agendar"`. Esse item é conectado direto em **"Tem Dados Completos Para Agendar?"** — a mesma entrada
 > usada pelo branch "agendar" normal — e a partir daí segue o caminho de agendar sem nenhuma
 > mudança: valida horário de funcionamento, verifica disponibilidade de verdade no Calendar e,
 > se livre, cria o evento, salva na planilha e confirma; se ocupado, reaproveita "Sugerir Outro

@@ -503,6 +503,27 @@ Remarcação" (mesmo `dataTableId` nos dois):
 | `mensagens_processadas` | `message_id`, `processado_em` | deduplicação de webhooks reentregues |
 | `locks_telefone` | `telefone`, `bloqueado_em` | lock de 30s para evitar execuções paralelas do mesmo número |
 
+> **Bug crítico corrigido (2026-09-24):** a partir do deploy desta rodada (23/09 20h56 UTC), o
+> workflow parou de responder **qualquer** mensagem recebida, a qualquer hora do dia — não só
+> fora do expediente. Causa: **Checar Mensagem Duplicada** e **Checar Lock do Telefone** (Data
+> Table, `operation: get`) ficaram sem `alwaysOutputData` configurado corretamente. Quando a
+> busca não encontra nenhuma linha — o caso normal, toda mensagem nova de um cliente — o node
+> não produz nenhum item de saída, e a execução para ali mesmo, silenciosamente, antes de
+> qualquer checagem de horário de funcionamento ou chamada à IA. O n8n registra essa execução
+> como `"success"` (não lança erro), então o Error Workflow nunca disparava — não havia como o
+> responsável perceber pela notificação de erro.
+>
+> Causa raiz do porquê `alwaysOutputData` nunca "pegou": `alwaysOutputData` é uma opção de
+> execução do node (fica na raiz do node, irmã de `parameters`) — não é um parâmetro do node.
+> Duas tentativas anteriores de configurá-la falharam por motivos diferentes: a primeira, ao
+> criar esses nodes via uma operação de workflow que não aceita esse campo (foi descartado em
+> silêncio); a segunda, ao tentar corrigir via uma operação que grava dentro de `parameters`
+> (onde o n8n não lê essa opção — o node ficava com uma cópia inofensiva e inútil do campo).
+> Corrigido usando a operação certa para configurações de node (não de parâmetro), que grava a
+> opção no lugar certo. Confirmado com um teste isolado no node real (mesma Data Table, mesma
+> configuração): a busca por uma mensagem inexistente passou a retornar 1 item sintético vazio,
+> em vez de zero itens.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

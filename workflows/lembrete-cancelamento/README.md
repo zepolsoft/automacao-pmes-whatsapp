@@ -276,15 +276,19 @@ dois workflows, mesmo `dataTableId`):
    condição `jaPassou` do outro workflow, e o texto de **Avisar Horário Fora do Expediente no
    WhatsApp** foi ajustado para "Esse horário já passou ou está fora do nosso expediente [...]".
 
-> **Bug corrigido (2026-09-24):** ao aplicar essa rodada nos dois workflows, os nodes
-> **Checar Mensagem Duplicada** e **Checar Lock do Telefone** ficaram sem `alwaysOutputData:
-> true` neste workflow (diferente do "Agendamento via WhatsApp", que já tinha desde o início).
-> Sem essa opção, uma busca na Data Table que não encontra nenhuma linha — o caso normal, de
-> mensagem nova e telefone sem lock ativo — não produz nenhum item de saída, e o IF logo depois
-> (**Mensagem Já Processada?**/**Telefone Ocupado?**) nunca roda: o loop simplesmente parava
-> nesse ponto para todo cliente, travando o fluxo inteiro de resposta ao lembrete (confirmar,
-> cancelar e remarcar nunca eram processados). Corrigido adicionando `alwaysOutputData: true`
-> nos dois nodes.
+> **Bug crítico corrigido (2026-09-24, duas tentativas):** os nodes **Checar Mensagem
+> Duplicada** e **Checar Lock do Telefone** precisam de `alwaysOutputData` (opção de execução
+> do node, não um parâmetro) para que uma busca sem resultado — o caso normal, de mensagem nova
+> e telefone sem lock ativo — ainda produza 1 item sintético vazio em vez de zero itens; sem
+> isso, o IF logo depois nunca roda e o loop trava ali para todo cliente, sem processar
+> confirmar/cancelar/remarcar. A primeira tentativa de correção (mesmo dia, mais cedo) usou uma
+> operação de workflow que grava dentro de `parameters` — onde o n8n não lê essa opção — então
+> ficou com uma cópia inofensiva e inútil do campo, sem nenhum efeito real; o bug continuou
+> presente mesmo depois de "corrigido" e publicado. Descoberto ao investigar o mesmo bug
+> reportado no workflow "Agendamento via WhatsApp" (ver o README daquele workflow para a
+> investigação completa) e confirmado aqui pela mesma causa. Corrigido de vez usando a operação
+> certa para configurações de node (grava na raiz do node, irmã de `parameters`), e confirmado
+> com um teste isolado direto na Data Table real.
 
 ## Histórico de correções
 

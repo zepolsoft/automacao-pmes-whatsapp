@@ -608,6 +608,14 @@ contra `esperas_lembrete` e encaminhada pro `resume_url`, se houver uma espera a
 Sem exclusão explícita da linha em `esperas_lembrete` quando a espera é resolvida — mesma
 decisão de janela fixa sem "unlock" já usada em `locks_telefone`.
 
+**Auditoria de risco (2026-09-25)**: janela de 13min vs. timeout de 10min dos Wait nodes,
+timing do refresh, múltiplos agendamentos no mesmo telefone (testado empiricamente — dois
+agendamentos em fila pro mesmo telefone resumem cada um com a resposta certa, sem contaminação
+cruzada, graças ao `splitInBatches(batchSize:1)` sequencial de **Processar Cada Agendamento** +
+`$execution.resumeUrl` fixo por execução), crescimento da tabela, e fuso horário — nenhum risco
+real encontrado. Detalhes completos na seção "Auditoria de risco da janela de tempo" do README
+do workflow "Agendamento via WhatsApp".
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

@@ -884,6 +884,48 @@ antiga fica simplesmente fora da janela de 13min depois de resolvida, e mesmo se
 resume for tentada contra uma execução que já terminou, o fallback em caso de erro garante que
 a mensagem não se perde.
 
+### Auditoria de risco da janela de tempo (2026-09-25)
+
+Antes de considerar essa ponte pronta pra produção, auditei node a node os pontos de risco de
+uma abordagem baseada em janela de tempo (não em exclusão ativa). Resumo — nenhum risco real
+encontrado, nenhuma mudança de código necessária, só confirmação:
+
+1. **Janela (13min) vs. timeout do Wait (10min)**: os dois Wait nodes do lembrete usam
+   `resumeAmount: 10, resumeUnit: minutes`. A janela de checagem (13min) é sempre MAIOR que o
+   timeout do Wait — logo, nunca existe uma "zona morta" onde o Wait ainda está esperando mas a
+   janela já expirou. No pior caso (tentar encaminhar pra uma espera que já estourou por
+   timeout entre 10min e 13min atrás), a chamada de resume falha (404, execução não está mais
+   esperando ali) e o `onError: continueErrorOutput` cai de volta pro fluxo normal — sem
+   mensagem perdida, só uma tentativa extra de ~500ms.
+2. **Refresh a cada reação**: confirmado por construção (não por convenção) — a única forma de
+   reentrar em qualquer um dos dois Wait nodes é passando pelo respectivo node "Registrar
+   Espera..." primeiro (tanto na entrada inicial quanto no loop-back de reação). Não existe
+   caminho no grafo que resuma o Wait sem regravar `atualizado_em` antes.
+3. **Múltiplos agendamentos no mesmo telefone**: `Processar Cada Agendamento` é um
+   `splitInBatches` com `batchSize: 1` (padrão) — processamento estritamente sequencial, um
+   item por vez, e uma pausa no Wait bloqueia a execução inteira até resolver (resposta ou
+   timeout) antes do próximo item começar. Como `$execution.resumeUrl` é fixo pra toda a
+   execução (não muda entre pausas), o segundo agendamento do mesmo telefone NUNCA escreve um
+   `resume_url` diferente enquanto o primeiro ainda está em espera — ele simplesmente não
+   começa a rodar até o primeiro terminar. **Testado empiricamente** com um workflow
+   descartável simulando dois agendamentos em fila pro mesmo telefone fake: o primeiro resume
+   corretamente com a resposta certa, o segundo (que só começa depois) também resume
+   corretamente com a resposta certa, sem contaminação cruzada. Uma ambiguidade residual real,
+   mas inerente ao domínio (não corrigível por implementação): se o cliente responder a um
+   lembrete DEPOIS que ele já estourou por timeout E o segundo lembrete já foi enviado, a
+   resposta tardia cai no segundo Wait — comportamento razoável (a conversa do primeiro já
+   estava encerrada por timeout de qualquer forma), documentado aqui como limitação conhecida,
+   não como bug.
+4. **Linha órfã**: `esperas_lembrete` não é lida em nenhum outro lugar do sistema além dos 3
+   nodes desta ponte. A escrita é sempre `upsert` por telefone (nunca `insert`), então a tabela
+   nunca cresce sem limite — existe no máximo uma linha por telefone distinto que já recebeu um
+   lembrete, reaproveitada pra sempre. Sem risco de volume/custo ao longo do tempo.
+5. **Fuso horário**: `atualizado_em` é gravado com `$now.toISO()` nos dois workflows (mesmo
+   padrão já usado e comprovado em produção por `bloqueado_em` em `locks_telefone`), e a
+   comparação usa `DateTime.fromISO(...) > DateTime.now().minus(...)` — comparação de instante
+   real via Luxon, não de string, então funciona corretamente independente do formato de exibição
+   (UTC `Z` ou `-03:00`) do timestamp armazenado.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

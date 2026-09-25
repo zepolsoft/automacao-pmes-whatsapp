@@ -318,7 +318,7 @@
             "status": "cancelado",
             "preco": "={{ $('Processar Cada Agendamento').item.json.preco }}",
             "criado_em": "={{ $('Processar Cada Agendamento').item.json.criado_em }}",
-            "atualizado_em": "={{ $now.toISO({ suppressMilliseconds: true }) }}"
+            "atualizado_em": "={{ $now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\") }}"
           },
           "matchingColumns": ["event_id"],
           "schema": [
@@ -466,7 +466,7 @@
             "status": "remarcado",
             "preco": "={{ $('Processar Cada Agendamento').item.json.preco }}",
             "criado_em": "={{ $('Processar Cada Agendamento').item.json.criado_em }}",
-            "atualizado_em": "={{ $now.toISO({ suppressMilliseconds: true }) }}"
+            "atualizado_em": "={{ $now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\") }}"
           },
           "matchingColumns": ["event_id"],
           "schema": [
@@ -810,7 +810,7 @@
             "status": "concluido",
             "preco": "={{ $json.preco }}",
             "criado_em": "={{ $json.criado_em }}",
-            "atualizado_em": "={{ $now.toISO({ suppressMilliseconds: true }) }}"
+            "atualizado_em": "={{ $now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\") }}"
           },
           "matchingColumns": ["event_id"],
           "schema": [

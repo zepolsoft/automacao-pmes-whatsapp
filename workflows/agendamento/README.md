@@ -768,6 +768,20 @@ Linha na Planilha (Cancelar)**, `atualizado_em`). Vale só pra escritas novas �
 planilha não foram alteradas. Mesmo ajuste aplicado no workflow "Lembrete, Cancelamento e
 Remarcação".
 
+**Correção (2026-09-25):** esse fix não funcionava, por dois motivos:
+
+1. `suppressMilliseconds: true` do Luxon só omite os milissegundos quando eles são `.000` —
+   com `$now` real quase sempre saía com ms (ex.: `2026-09-24T22:00:48.681-03:00` na execução
+   818 do workflow de lembrete). Trocado nos 6 pontos de escrita (3 aqui, 3 no lembrete) por
+   `$now.toFormat("yyyy-MM-dd'T'HH:mm:ssZZ")`, que sempre gera `2026-09-25T10:27:19-03:00`
+   (verificado na instância com timezone `America/Sao_Paulo`).
+2. Neste workflow, o autosave da UI `bc9c9e6c` (09-24 16:58 UTC, uma aba do editor aberta com
+   o estado antigo) sobrescreveu a versão MCP `b9284ee2` 6 minutos depois, voltando os 3 nodes
+   pra `$now.toISO()` — e revertendo junto o fix de "preservar serviço original ao remarcar"
+   (`summary` de **Atualizar Evento no Calendar** e `servico` de **Atualizar Linha na
+   Planilha**). Os dois foram reaplicados. Antes de editar via MCP, feche abas do editor abertas
+   nesse workflow.
+
 ## Identidade "Zap" (2026-09-24)
 
 O assistente virtual da barbearia agora tem nome: **Zap**. Mudança só de identidade/tom no

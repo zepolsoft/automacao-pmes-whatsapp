@@ -548,7 +548,7 @@
             "data": "={{ $('Interpretar Intenção do Cliente').item.json.output.data_hora_inicio }}",
             "status": "agendado",
             "preco": "={{ $('Buscar Serviços e Preços').all().find(i => i.json.servico === $('Interpretar Intenção do Cliente').item.json.output.servico)?.json.preco ?? '' }}",
-            "criado_em": "={{ $now.toISO({ suppressMilliseconds: true }) }}"
+            "criado_em": "={{ $now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\") }}"
           },
           "matchingColumns": [],
           "schema": [
@@ -775,7 +775,7 @@
             "status": "remarcado",
             "preco": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.preco }}",
             "criado_em": "={{ $('Selecionar Agendamento Mais Recente (Remarcar)').item.json.criado_em }}",
-            "atualizado_em": "={{ $now.toISO({ suppressMilliseconds: true }) }}"
+            "atualizado_em": "={{ $now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\") }}"
           },
           "matchingColumns": ["event_id"],
           "schema": [
@@ -909,7 +909,7 @@
             "status": "cancelado",
             "preco": "={{ $('Selecionar Agendamento Mais Recente (Cancelar)').item.json.preco }}",
             "criado_em": "={{ $('Selecionar Agendamento Mais Recente (Cancelar)').item.json.criado_em }}",
-            "atualizado_em": "={{ $now.toISO({ suppressMilliseconds: true }) }}"
+            "atualizado_em": "={{ $now.toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\") }}"
           },
           "matchingColumns": ["event_id"],
           "schema": [

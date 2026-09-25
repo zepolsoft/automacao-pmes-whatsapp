@@ -528,6 +528,11 @@ Mesmo ajuste aplicado no workflow "Agendamento via WhatsApp" (`criado_em` em **S
 Planilha**, `atualizado_em` em **Atualizar Linha na Planilha** e **Atualizar Linha na Planilha
 (Cancelar)**).
 
+**Correção (2026-09-25):** `suppressMilliseconds: true` do Luxon só omite os milissegundos
+quando eles são `.000` — na prática continuava gravando com ms (execução 818, **Marcar Como
+Concluído**: `2026-09-24T22:00:48.681-03:00`). Trocado nos 3 nodes por
+`$now.toFormat("yyyy-MM-dd'T'HH:mm:ssZZ")`, que sempre gera `2026-09-25T10:27:19-03:00`.
+
 ## Identidade "Zap" (2026-09-24)
 
 Mesma mudança de identidade/tom do workflow "Agendamento via WhatsApp": o assistente se chama

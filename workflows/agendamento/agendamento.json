@@ -172,6 +172,62 @@
       }
     },
     {
+      "id": "c982e961-cde8-490e-9819-d4222e80368d",
+      "name": "Verificar Espera de Lembrete",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1648, 1220],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": { "__rl": true, "mode": "id", "value": "0nxZGWIelgpYa7PZ" },
+        "filters": { "conditions": [{ "keyName": "telefone", "condition": "eq", "keyValue": "={{ $('Normalizar Dados da Mensagem').item.json.telefone }}" }] },
+        "returnAll": false,
+        "limit": 1
+      }
+    },
+    {
+      "id": "e77f8e4f-138d-4e01-90d7-8916b37d6a9a",
+      "name": "Há Espera de Lembrete Ativa?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1850, 1220],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [{ "leftValue": "={{ $json.resume_url ? (DateTime.fromISO($json.atualizado_em) > DateTime.now().minus({ minutes: 13 })) : false }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ce480745-64f2-4320-97c1-f2e6968961f4",
+      "name": "Encaminhar Mensagem para Lembrete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [2050, 1150],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.resume_url }}",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Receber Mensagem WhatsApp').item.json }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "654987ba-c5e0-46a1-881f-de3b4acda409",
+      "name": "Mensagem Encaminhada para Lembrete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2250, 1100],
+      "parameters": {}
+    },
+    {
       "id": "87b59fbb-0fc3-4d99-b4f8-bce8a5492fca",
       "name": "Ativar Indicador de Digitação",
       "type": "n8n-nodes-base.httpRequest",
@@ -994,7 +1050,10 @@
         [{ "node": "Registrar Lock do Telefone", "type": "main", "index": 0 }]
       ]
     },
-    "Registrar Lock do Telefone": { "main": [[{ "node": "Ativar Indicador de Digitação", "type": "main", "index": 0 }]] },
+    "Registrar Lock do Telefone": { "main": [[{ "node": "Verificar Espera de Lembrete", "type": "main", "index": 0 }]] },
+    "Verificar Espera de Lembrete": { "main": [[{ "node": "Há Espera de Lembrete Ativa?", "type": "main", "index": 0 }]] },
+    "Há Espera de Lembrete Ativa?": { "main": [[{ "node": "Encaminhar Mensagem para Lembrete", "type": "main", "index": 0 }], [{ "node": "Ativar Indicador de Digitação", "type": "main", "index": 0 }]] },
+    "Encaminhar Mensagem para Lembrete": { "main": [[{ "node": "Mensagem Encaminhada para Lembrete", "type": "main", "index": 0 }], [{ "node": "Ativar Indicador de Digitação", "type": "main", "index": 0 }]] },
     "Ativar Indicador de Digitação": { "main": [[{ "node": "Buscar Serviços e Preços", "type": "main", "index": 0 }]] },
     "Buscar Serviços e Preços": { "main": [[{ "node": "Formatar Lista de Serviços", "type": "main", "index": 0 }]] },
     "Formatar Lista de Serviços": { "main": [[{ "node": "Interpretar Intenção do Cliente", "type": "main", "index": 0 }]] },

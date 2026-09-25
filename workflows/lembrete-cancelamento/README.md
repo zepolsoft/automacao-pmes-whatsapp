@@ -504,21 +504,17 @@ dois workflows, mesmo `dataTableId`):
 > mas difere da convenção explícita usada em `agendamento.json`; não foi reaplicado nesta rodada
 > para não conflitar com edições feitas diretamente no editor do n8n.
 
-## Limitação conhecida do protótipo — Wait node
+## Wait node ↔ WhatsApp: ponte com o workflow de agendamento (2026-09-25)
 
-O node **Aguardar Resposta do Cliente** usa `resume: webhook`: ao pausar, o n8n gera uma URL
-própria (`$execution.resumeUrl`) que precisa ser chamada para o workflow continuar. Como a
-resposta do cliente chega pelo webhook do WhatsApp (não por essa URL diretamente), falta ligar
-os dois pontos em produção. O caminho recomendado:
-
-- Ao enviar o lembrete, salvar o `resumeUrl` (ou o `execution.id`) junto com o telefone do
-  cliente (ex.: numa aba de "aguardando resposta" na planilha ou numa Data Table do n8n).
-- Ter um workflow (pode reusar o trigger do WhatsApp do workflow de agendamento) que, ao
-  receber uma mensagem, verifica se aquele telefone está "aguardando resposta de lembrete" e,
-  se estiver, repassa o texto para o `resumeUrl` salvo.
-
-Isso não foi implementado neste protótipo para manter o foco na estrutura e lógica principal —
-fica como próximo passo antes de ir para produção.
+> Isto ERA uma limitação conhecida do protótipo (texto original abaixo, mantido como
+> histórico) — implementada em 2026-09-25. Ver seção "Ponte com o Wait node" mais abaixo para
+> a implementação real.
+>
+> ~~O node **Aguardar Resposta do Cliente** usa `resume: webhook`: ao pausar, o n8n gera uma
+> URL própria (`$execution.resumeUrl`) que precisa ser chamada para o workflow continuar. Como
+> a resposta do cliente chega pelo webhook do WhatsApp (não por essa URL diretamente), falta
+> ligar os dois pontos em produção... Isso não foi implementado neste protótipo para manter o
+> foco na estrutura e lógica principal — fica como próximo passo antes de ir para produção.~~
 
 ## Padronização de formato de data/hora (2026-09-24)
 
@@ -575,6 +571,42 @@ Apenas Mensagens" equivalente pra reaproveitar. Corrigido com dois novos IFs log
 Wait resumir — **É uma Reação? (Lembrete)** e **É uma Reação? (Confirmação da Remarcação)**:
 se for reação, volta pro mesmo Wait (rearma a espera, ignora completamente, sem processar nem
 responder nada); se não for, segue o fluxo normal de respondeu/timeout de sempre.
+
+## Ponte com o Wait node (2026-09-25)
+
+Implementação da ponte descrita acima ("Wait node ↔ WhatsApp"). Como este workflow não tem
+trigger de WhatsApp próprio (só Schedule Triggers), a resposta real do cliente chega sempre
+pelo webhook do workflow "Agendamento via WhatsApp" — sem essa ponte, ela era processada lá
+como mensagem avulsa, e o Wait daqui estourava por timeout mesmo com o cliente tendo
+respondido.
+
+**Do lado deste workflow** (a parte que grava a "ponte" pra ser encontrada):
+
+- Nova Data Table **`esperas_lembrete`** (compartilhada com "Agendamento via WhatsApp"):
+  colunas `telefone`, `resume_url`, `atualizado_em`.
+- Novo node **Registrar Espera de Lembrete** logo antes de **Aguardar Resposta do Cliente**
+  (upsert por telefone: `telefone`, `resume_url` = `{{ $execution.resumeUrl }}`,
+  `atualizado_em` = `{{ $now.toISO() }}`) — e o mesmo padrão duplicado como **Registrar Espera
+  de Lembrete (Confirmação da Remarcação)**, logo antes de **Aguardar Confirmação da
+  Remarcação**. O gate de reação (**É uma Reação? (Lembrete)** / **(Confirmação da
+  Remarcação)**) também passa por esse node de registro no caminho de volta pro Wait, pra
+  manter `atualizado_em` sempre fresco a cada reentrada.
+- **`$execution.resumeUrl` é estável durante toda a vida da execução** (confirmado com teste
+  isolado) — não muda entre pausas repetidas do mesmo Wait, então um único registro por
+  telefone por execução já cobre as reentradas causadas por reação.
+- **Os dois Wait nodes precisaram de `httpMethod: "POST"` explícito** — sem isso, o padrão é
+  GET, e uma chamada de resume com corpo JSON (necessário pra levar
+  `body.messages[0].text.body` no formato que **Cliente Respondeu ou Deu Timeout?** já espera)
+  é rejeitada com 404. Confirmado com um teste isolado real (workflow descartável, telefone
+  fake): POST com corpo JSON resume a execução certa e o corpo cai em `$json.body` exatamente
+  no formato esperado pelas expressões já existentes — nenhuma delas precisou mudar.
+
+**Do lado do outro workflow** ("Agendamento via WhatsApp"): ver seção "Ponte com o Wait node do
+workflow de Lembrete" no README daquele workflow — é lá que a mensagem recebida é checada
+contra `esperas_lembrete` e encaminhada pro `resume_url`, se houver uma espera ativa.
+
+Sem exclusão explícita da linha em `esperas_lembrete` quando a espera é resolvida — mesma
+decisão de janela fixa sem "unlock" já usada em `locks_telefone`.
 
 ## Error Workflow centralizado (2026-09-24)
 

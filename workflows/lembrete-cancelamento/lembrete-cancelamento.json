@@ -66,6 +66,33 @@
       }
     },
     {
+      "id": "74f8c581-19c2-48f7-b47b-31458e2c9756",
+      "name": "Registrar Espera de Lembrete",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1250, 80],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": { "__rl": true, "mode": "id", "value": "0nxZGWIelgpYa7PZ" },
+        "matchType": "allConditions",
+        "filters": { "conditions": [{ "keyName": "telefone", "condition": "eq", "keyValue": "={{ $('Processar Cada Agendamento').item.json.telefone }}" }] },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefone": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+            "resume_url": "={{ $execution.resumeUrl }}",
+            "atualizado_em": "={{ $now.toISO() }}"
+          },
+          "schema": [
+            { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "resume_url", "displayName": "resume_url", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "atualizado_em", "displayName": "atualizado_em", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "canBeUsedToMatch": false }
+          ]
+        }
+      }
+    },
+    {
       "id": "418ae243-dc2c-4d56-b8cb-fc75c0f8e4c5",
       "name": "Aguardar Resposta do Cliente",
       "type": "n8n-nodes-base.wait",
@@ -74,6 +101,7 @@
       "webhookId": "862f5dbb-bcce-4182-b45b-4ed4a4191fac",
       "parameters": {
         "resume": "webhook",
+        "httpMethod": "POST",
         "options": {},
         "limitWaitTime": true,
         "limitType": "afterTimeInterval",
@@ -473,6 +501,33 @@
       }
     },
     {
+      "id": "85c93fe3-8688-47c1-b9f7-4c1db7fed45f",
+      "name": "Registrar Espera de Lembrete (Confirmação da Remarcação)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [3060, 560],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": { "__rl": true, "mode": "id", "value": "0nxZGWIelgpYa7PZ" },
+        "matchType": "allConditions",
+        "filters": { "conditions": [{ "keyName": "telefone", "condition": "eq", "keyValue": "={{ $('Processar Cada Agendamento').item.json.telefone }}" }] },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefone": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+            "resume_url": "={{ $execution.resumeUrl }}",
+            "atualizado_em": "={{ $now.toISO() }}"
+          },
+          "schema": [
+            { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "resume_url", "displayName": "resume_url", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "atualizado_em", "displayName": "atualizado_em", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "canBeUsedToMatch": false }
+          ]
+        }
+      }
+    },
+    {
       "id": "b8c9d0e1-1111-4fff-9aaa-111111111111",
       "name": "Aguardar Confirmação da Remarcação",
       "type": "n8n-nodes-base.wait",
@@ -481,6 +536,7 @@
       "webhookId": "c1d2e3f4-1111-4a1a-8b1b-111111111111",
       "parameters": {
         "resume": "webhook",
+        "httpMethod": "POST",
         "options": {},
         "limitWaitTime": true,
         "limitType": "afterTimeInterval",
@@ -941,9 +997,10 @@
     "Disparar Lembrete Diário às 8h": { "main": [[{ "node": "Buscar Agendamentos de Hoje (Planilha)", "type": "main", "index": 0 }]] },
     "Buscar Agendamentos de Hoje (Planilha)": { "main": [[{ "node": "Filtrar Data de Hoje", "type": "main", "index": 0 }]] },
     "Filtrar Data de Hoje": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
-    "Enviar Lembrete no WhatsApp": { "main": [[{ "node": "Aguardar Resposta do Cliente", "type": "main", "index": 0 }]] },
+    "Enviar Lembrete no WhatsApp": { "main": [[{ "node": "Registrar Espera de Lembrete", "type": "main", "index": 0 }]] },
+    "Registrar Espera de Lembrete": { "main": [[{ "node": "Aguardar Resposta do Cliente", "type": "main", "index": 0 }]] },
     "Aguardar Resposta do Cliente": { "main": [[{ "node": "É uma Reação? (Lembrete)", "type": "main", "index": 0 }]] },
-    "É uma Reação? (Lembrete)": { "main": [[{ "node": "Aguardar Resposta do Cliente", "type": "main", "index": 0 }], [{ "node": "Cliente Respondeu ou Deu Timeout?", "type": "main", "index": 0 }]] },
+    "É uma Reação? (Lembrete)": { "main": [[{ "node": "Registrar Espera de Lembrete", "type": "main", "index": 0 }], [{ "node": "Cliente Respondeu ou Deu Timeout?", "type": "main", "index": 0 }]] },
     "Cliente Respondeu ou Deu Timeout?": {
       "main": [
         [{ "node": "Normalizar Resposta do Lembrete", "type": "main", "index": 0 }],
@@ -1010,9 +1067,10 @@
         [{ "node": "Pedir Outro Horário no WhatsApp", "type": "main", "index": 0 }]
       ]
     },
-    "Propor Remarcação no WhatsApp": { "main": [[{ "node": "Aguardar Confirmação da Remarcação", "type": "main", "index": 0 }]] },
+    "Propor Remarcação no WhatsApp": { "main": [[{ "node": "Registrar Espera de Lembrete (Confirmação da Remarcação)", "type": "main", "index": 0 }]] },
+    "Registrar Espera de Lembrete (Confirmação da Remarcação)": { "main": [[{ "node": "Aguardar Confirmação da Remarcação", "type": "main", "index": 0 }]] },
     "Aguardar Confirmação da Remarcação": { "main": [[{ "node": "É uma Reação? (Confirmação da Remarcação)", "type": "main", "index": 0 }]] },
-    "É uma Reação? (Confirmação da Remarcação)": { "main": [[{ "node": "Aguardar Confirmação da Remarcação", "type": "main", "index": 0 }], [{ "node": "Cliente Confirmou a Remarcação ou Deu Timeout?", "type": "main", "index": 0 }]] },
+    "É uma Reação? (Confirmação da Remarcação)": { "main": [[{ "node": "Registrar Espera de Lembrete (Confirmação da Remarcação)", "type": "main", "index": 0 }], [{ "node": "Cliente Confirmou a Remarcação ou Deu Timeout?", "type": "main", "index": 0 }]] },
     "Cliente Confirmou a Remarcação ou Deu Timeout?": {
       "main": [
         [{ "node": "Normalizar Confirmação da Remarcação", "type": "main", "index": 0 }],

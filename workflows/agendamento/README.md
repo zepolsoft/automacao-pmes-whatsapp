@@ -838,6 +838,52 @@ sua mensagem". Corrigido adicionando uma segunda condição em **Filtrar Apenas 
 Evento de reação é descartado no mesmo lugar, sem acionar IA nem enviar resposta alguma —
 mesmo tratamento já dado a eventos de status.
 
+## Ponte com o Wait node do workflow de Lembrete (2026-09-25)
+
+Bug de roteamento entre os dois workflows: quando o cliente responde a um lembrete diário (o
+workflow "Lembrete, Cancelamento e Remarcação" está com o node **Aguardar Resposta do Cliente**
+— Wait, `resume: webhook` — pausado esperando aquele telefone), a resposta chega no webhook do
+WhatsApp normalmente, e como só este workflow tem um trigger de WhatsApp real (o de lembrete só
+tem Schedule Triggers), a mensagem era processada aqui como se fosse avulsa — resposta genérica
+e fora de contexto, e o Wait do lembrete acabava estourando por timeout mesmo o cliente tendo
+respondido. Essa ponte nunca tinha sido implementada (era uma limitação documentada no README
+do lembrete: "Limitação conhecida do protótipo — Wait node").
+
+**Implementação**, logo depois de **Registrar Lock do Telefone**, antes de qualquer
+processamento normal:
+
+1. **Verificar Espera de Lembrete** (Data Table `esperas_lembrete`, `get` por telefone,
+   `alwaysOutputData: true`) — nova Data Table, compartilhada com o workflow de lembrete, que
+   guarda `telefone` + `resume_url` (`$execution.resumeUrl` do lembrete) + `atualizado_em`.
+2. **Há Espera de Lembrete Ativa?** (IF): `resume_url` existe e `atualizado_em` está dentro dos
+   últimos 13 minutos (cobre o `resumeAmount` de 10min do Wait + margem de processamento) —
+   mesmo padrão de `$json.campo ? (...) : false` já usado em `Telefone Ocupado?`.
+   - **Não**: segue o fluxo normal (indicador de digitando, IA, etc.) — nada muda.
+   - **Sim**: **Encaminhar Mensagem para Lembrete** (HTTP Request, POST pro `resume_url`,
+     corpo = payload bruto de `Receber Mensagem WhatsApp`) — não roda mais nada aqui, nem IA
+     nem indicador de digitando.
+     - Sucesso: **Mensagem Encaminhada para Lembrete** (NoOp, termina aqui).
+     - Falha (`onError: continueErrorOutput`, pra ter os dois outputs — sucesso e erro): cai de
+       volta no fluxo normal em vez de perder a mensagem — cobre o caso de uma espera
+       "fantasma" que já foi resolvida mas ainda não expirou pela janela de 13min.
+
+**Duas descobertas confirmadas com testes isolados (workflows utilitários descartáveis, com
+infraestrutura real — Data Table real, mecanismo de resume real, telefones fake pra não afetar
+dados/clientes reais) antes de aplicar em produção:**
+- `$execution.resumeUrl` é estável durante toda a vida da execução (não muda entre pausas
+  repetidas do mesmo Wait, por exemplo pela reentrada por reação) — só precisa ser gravado uma
+  vez por telefone por execução (e de novo a cada reentrada por reação, como refresh).
+- O Wait node com `resume: webhook` **exige POST explícito** (`httpMethod: "POST"`) pra aceitar
+  um corpo JSON — sem isso, o padrão é GET e a chamada de resume é rejeitada com 404. Os dois
+  Wait nodes do workflow de lembrete não tinham esse campo definido; corrigido lá (ver o README
+  daquele workflow).
+
+Sem exclusão explícita da linha em `esperas_lembrete` quando a espera é resolvida — decisão
+deliberada, mesmo padrão de janela fixa sem "unlock" já usado em `locks_telefone`: uma espera
+antiga fica simplesmente fora da janela de 13min depois de resolvida, e mesmo se a chamada de
+resume for tentada contra uma execução que já terminou, o fallback em caso de erro garante que
+a mensagem não se perde.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

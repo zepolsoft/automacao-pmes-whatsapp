@@ -557,6 +557,25 @@ Não aplicado à etapa de confirmação da remarcação (**Aguardar Confirmaçã
 **Classificar Confirmação da Remarcação**), que não tem seu próprio dedup/lock (decisão
 deliberada, ver "Robustez" abaixo) — fora do escopo desta mudança.
 
+## Bug: indicador de digitando com message_id vazio (2026-09-25)
+
+Mesmo bug do workflow "Agendamento via WhatsApp": `jsonBody` de **Ativar Indicador de
+Digitação** usava `$json.message_id`, que resolvia contra a saída do node anterior imediato
+(**Registrar Lock do Telefone**), sem esse campo. Corrigido referenciando
+`$('Normalizar Resposta do Lembrete').item.json.message_id` explicitamente.
+
+## Bug: reação com emoji tratada como resposta vazia (2026-09-25)
+
+Cliente reagindo com emoji (não enviando mensagem nova) chega com `messages[0].type ===
+"reaction"`, sem `text.body`. Os IFs **Cliente Respondeu ou Deu Timeout?** e **Cliente
+Confirmou a Remarcação ou Deu Timeout?** tratavam isso como resposta vazia → timeout,
+encerrando a espera cedo demais e enviando a mensagem de timeout de forma equivocada. Este
+workflow não recebe webhook direto (só resume de Wait node), então não existe um "Filtrar
+Apenas Mensagens" equivalente pra reaproveitar. Corrigido com dois novos IFs logo após cada
+Wait resumir — **É uma Reação? (Lembrete)** e **É uma Reação? (Confirmação da Remarcação)**:
+se for reação, volta pro mesmo Wait (rearma a espera, ignora completamente, sem processar nem
+responder nada); se não for, segue o fluxo normal de respondeu/timeout de sempre.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

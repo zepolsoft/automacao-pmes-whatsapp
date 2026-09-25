@@ -82,6 +82,21 @@
       }
     },
     {
+      "id": "c7d8e9f0-1111-4222-8333-444444444444",
+      "name": "É uma Reação? (Lembrete)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1415, 220],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "combinator": "and",
+          "conditions": [{ "leftValue": "={{ ($json.body?.messages?.[0]?.type ?? $json.messages?.[0]?.type) === 'reaction' }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }]
+        },
+        "options": {}
+      }
+    },
+    {
       "id": "ce13e7ac-d009-4bc5-be28-4594276fbb8f",
       "name": "Cliente Respondeu ou Deu Timeout?",
       "type": "n8n-nodes-base.if",
@@ -471,6 +486,21 @@
         "limitType": "afterTimeInterval",
         "resumeAmount": 10,
         "resumeUnit": "minutes"
+      }
+    },
+    {
+      "id": "c7d8e9f0-5555-4666-8777-888888888888",
+      "name": "É uma Reação? (Confirmação da Remarcação)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [3280, 700],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "combinator": "and",
+          "conditions": [{ "leftValue": "={{ ($json.body?.messages?.[0]?.type ?? $json.messages?.[0]?.type) === 'reaction' }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }]
+        },
+        "options": {}
       }
     },
     {
@@ -889,7 +919,7 @@
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ { \"messaging_product\": \"whatsapp\", \"status\": \"read\", \"message_id\": $json.message_id, \"typing_indicator\": { \"type\": \"text\" } } }}",
+        "jsonBody": "={{ { \"messaging_product\": \"whatsapp\", \"status\": \"read\", \"message_id\": $('Normalizar Resposta do Lembrete').item.json.message_id, \"typing_indicator\": { \"type\": \"text\" } } }}",
         "options": { "response": { "response": { "neverError": true } } }
       }
     },
@@ -912,7 +942,8 @@
     "Buscar Agendamentos de Hoje (Planilha)": { "main": [[{ "node": "Filtrar Data de Hoje", "type": "main", "index": 0 }]] },
     "Filtrar Data de Hoje": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Enviar Lembrete no WhatsApp": { "main": [[{ "node": "Aguardar Resposta do Cliente", "type": "main", "index": 0 }]] },
-    "Aguardar Resposta do Cliente": { "main": [[{ "node": "Cliente Respondeu ou Deu Timeout?", "type": "main", "index": 0 }]] },
+    "Aguardar Resposta do Cliente": { "main": [[{ "node": "É uma Reação? (Lembrete)", "type": "main", "index": 0 }]] },
+    "É uma Reação? (Lembrete)": { "main": [[{ "node": "Aguardar Resposta do Cliente", "type": "main", "index": 0 }], [{ "node": "Cliente Respondeu ou Deu Timeout?", "type": "main", "index": 0 }]] },
     "Cliente Respondeu ou Deu Timeout?": {
       "main": [
         [{ "node": "Normalizar Resposta do Lembrete", "type": "main", "index": 0 }],
@@ -980,7 +1011,8 @@
       ]
     },
     "Propor Remarcação no WhatsApp": { "main": [[{ "node": "Aguardar Confirmação da Remarcação", "type": "main", "index": 0 }]] },
-    "Aguardar Confirmação da Remarcação": { "main": [[{ "node": "Cliente Confirmou a Remarcação ou Deu Timeout?", "type": "main", "index": 0 }]] },
+    "Aguardar Confirmação da Remarcação": { "main": [[{ "node": "É uma Reação? (Confirmação da Remarcação)", "type": "main", "index": 0 }]] },
+    "É uma Reação? (Confirmação da Remarcação)": { "main": [[{ "node": "Aguardar Confirmação da Remarcação", "type": "main", "index": 0 }], [{ "node": "Cliente Confirmou a Remarcação ou Deu Timeout?", "type": "main", "index": 0 }]] },
     "Cliente Confirmou a Remarcação ou Deu Timeout?": {
       "main": [
         [{ "node": "Normalizar Confirmação da Remarcação", "type": "main", "index": 0 }],

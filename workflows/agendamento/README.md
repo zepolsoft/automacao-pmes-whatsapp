@@ -817,6 +817,27 @@ POST https://graph.facebook.com/v21.0/{phone-number-id}/messages
 - O indicador some sozinho quando a mensagem de resposta final é enviada (ou depois de ~25s),
   sem precisar de node de "desligar".
 
+## Bug: indicador de digitando com message_id vazio (2026-09-25)
+
+Primeiro teste real do indicador de "digitando" (seção acima): o node rodou sem travar o
+fluxo (como projetado), mas a chamada à Graph API retornava erro (`"The parameter to is
+required"`, `code: 100`) — o indicador nunca aparecia de fato. Causa: `jsonBody` usava
+`$json.message_id`, mas `$json` ali reflete a saída do node anterior imediato (**Registrar
+Lock do Telefone**, um upsert na Data Table `locks_telefone`), que não tem campo
+`message_id` — só `telefone`/`bloqueado_em`/`id`/etc. O corpo da requisição ia incompleto.
+Corrigido referenciando `$('Normalizar Dados da Mensagem').item.json.message_id`
+explicitamente, em vez de confiar em `$json` atravessar nodes intermediários sem esse campo.
+
+## Bug: reação com emoji tratada como mensagem vazia (2026-09-25)
+
+Cliente reagindo com emoji a uma mensagem anterior (recurso de reação nativo do WhatsApp, não
+uma mensagem nova) chega com `messages[0].type === "reaction"`, sem `text.body`. O workflow
+tratava isso como mensagem de texto vazia, gerando respostas repetidas de "não consegui ver
+sua mensagem". Corrigido adicionando uma segunda condição em **Filtrar Apenas Mensagens**
+(mesmo node que já filtra eventos de status/entrega/leitura): `messages[0].type !== "reaction"`.
+Evento de reação é descartado no mesmo lugar, sem acionar IA nem enviar resposta alguma —
+mesmo tratamento já dado a eventos de status.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

@@ -355,6 +355,18 @@
       }
     },
     {
+      "id": "3d5e7f90-1a2b-4c3d-8e4f-5a6b7c8d9e0f",
+      "name": "Buscar Duração dos Serviços",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [2384, 400],
+      "parameters": {
+        "documentId": { "__rl": true, "value": "", "mode": "list", "cachedResultName": "Serviços - Barbearia" },
+        "sheetName": { "__rl": true, "value": "", "mode": "list", "cachedResultName": "Serviços" },
+        "options": {}
+      }
+    },
+    {
       "id": "b7c8d9e0-2f3a-4b5c-9d6e-7f8091a2b3c4",
       "name": "Validar Horário de Funcionamento",
       "type": "n8n-nodes-base.code",
@@ -364,7 +376,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "return $input.all().map(item => {\n  const output = $('Classificar Resposta do Lembrete').first().json.output || {};\n  const inicio = DateTime.fromISO(output.novo_horario_inicio, { zone: 'America/Sao_Paulo' });\n  const fim = DateTime.fromISO(output.novo_horario_fim, { zone: 'America/Sao_Paulo' });\n\n  const abertura = 9 * 60;\n  const fechamento = 18 * 60;\n  const minutosInicio = inicio.hour * 60 + inicio.minute;\n  const minutosFim = fim.hour * 60 + fim.minute;\n  const domingo = inicio.weekday === 7;\n  const jaPassou = inicio.isValid && inicio < DateTime.now().setZone('America/Sao_Paulo');\n\n  const dentroDoExpediente =\n    inicio.isValid &&\n    fim.isValid &&\n    !domingo &&\n    !jaPassou &&\n    minutosInicio >= abertura &&\n    minutosInicio < fechamento &&\n    minutosFim <= fechamento;\n\n  return { json: { ...item.json, dentro_do_expediente: dentroDoExpediente } };\n});"
+        "jsCode": "const ZONA = 'America/Sao_Paulo';\nconst normalizar = s => String(s ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\nconst servicos = $('Buscar Duração dos Serviços').all().map(i => i.json);\n\n// Acha um serviço da planilha pelo nome: igual (ignorando acento/caixa) ou, se só um bater, parcial.\nconst encontrarServico = nome => {\n  const alvo = normalizar(nome);\n  if (!alvo) return null;\n  const exato = servicos.find(s => normalizar(s.servico) === alvo);\n  if (exato) return exato;\n  const parciais = servicos.filter(s => normalizar(s.servico).includes(alvo) || alvo.includes(normalizar(s.servico)));\n  return parciais.length === 1 ? parciais[0] : null;\n};\n\n// Duração em minutos pela planilha de Serviços; combinações (\"X e Y\") somam as partes.\nconst duracaoDoServico = nome => {\n  if (!nome || normalizar(nome) === 'nao especificado') return null;\n  const unico = encontrarServico(nome);\n  if (unico) return Number(unico.duracao_minutos) || null;\n  const partes = normalizar(nome).split(/\\s*(?:\\+|,| e )\\s*/).filter(Boolean);\n  if (partes.length < 2) return null;\n  const encontrados = partes.map(encontrarServico);\n  if (encontrados.some(s => !s || !Number(s.duracao_minutos))) return null;\n  return encontrados.reduce((total, s) => total + Number(s.duracao_minutos), 0);\n};\n\n// A entrada são as linhas da planilha de Serviços; o agendamento em si vem pelo pareamento do item 0.\nconst output = { ...($('Classificar Resposta do Lembrete').first().json.output || {}) };\nconst agendamento = $('Processar Cada Agendamento').itemMatching(0).json;\nconst inicio = DateTime.fromISO(output.novo_horario_inicio, { zone: ZONA });\nconst duracao = duracaoDoServico(agendamento.servico);\n\n// O término sai sempre de início + duração da planilha; o novo_horario_fim da IA só fica se o serviço não for achado.\nif (duracao && inicio.isValid) {\n  output.novo_horario_fim = inicio.plus({ minutes: duracao }).toFormat(\"yyyy-MM-dd'T'HH:mm:ssZZ\");\n}\nconst fim = DateTime.fromISO(output.novo_horario_fim, { zone: ZONA });\n\nconst abertura = 9 * 60;\nconst fechamento = 18 * 60;\nconst minutosInicio = inicio.hour * 60 + inicio.minute;\nconst minutosFim = fim.hour * 60 + fim.minute;\nconst domingo = inicio.weekday === 7;\nconst jaPassou = inicio.isValid && inicio < DateTime.now().setZone(ZONA);\n\nconst dentroDoExpediente =\n  inicio.isValid &&\n  fim.isValid &&\n  !domingo &&\n  !jaPassou &&\n  minutosInicio >= abertura &&\n  minutosInicio < fechamento &&\n  minutosFim <= fechamento;\n\nreturn [{\n  json: { output, duracao_minutos: duracao, duracao_fonte: duracao ? 'planilha' : 'ia', dentro_do_expediente: dentroDoExpediente },\n  pairedItem: { item: 0 }\n}];\n"
       }
     },
     {
@@ -410,7 +422,7 @@
         "resource": "calendar",
         "calendar": { "__rl": true, "mode": "list", "value": "zepolsoft@gmail.com", "cachedResultName": "zepol lopez" },
         "timeMin": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}",
-        "timeMax": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_fim }}",
+        "timeMax": "={{ $('Validar Horário de Funcionamento').item.json.output.novo_horario_fim }}",
         "options": {}
       }
     },
@@ -442,7 +454,7 @@
         "eventId": "={{ $('Processar Cada Agendamento').item.json.event_id }}",
         "updateFields": {
           "start": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}",
-          "end": "={{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_fim }}"
+          "end": "={{ $('Validar Horário de Funcionamento').item.json.output.novo_horario_fim }}"
         }
       }
     },
@@ -1043,10 +1055,11 @@
       "main": [
         [{ "node": "Enviar Confirmação Final no WhatsApp", "type": "main", "index": 0 }],
         [{ "node": "Cancelar Evento no Calendar", "type": "main", "index": 0 }],
-        [{ "node": "Validar Horário de Funcionamento", "type": "main", "index": 0 }],
+        [{ "node": "Buscar Duração dos Serviços", "type": "main", "index": 0 }],
         [{ "node": "Pedir Esclarecimento no WhatsApp", "type": "main", "index": 0 }]
       ]
     },
+    "Buscar Duração dos Serviços": { "main": [[{ "node": "Validar Horário de Funcionamento", "type": "main", "index": 0 }]] },
     "Enviar Confirmação Final no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Processar Cada Agendamento": { "main": [[], [{ "node": "Enviar Lembrete no WhatsApp", "type": "main", "index": 0 }]] },
     "Cancelar Evento no Calendar": { "main": [[{ "node": "Atualizar Status na Planilha (Cancelar)", "type": "main", "index": 0 }]] },

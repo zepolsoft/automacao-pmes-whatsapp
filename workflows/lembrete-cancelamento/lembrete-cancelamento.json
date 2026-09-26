@@ -214,7 +214,7 @@
       "position": [1872, 80],
       "parameters": {
         "promptType": "define",
-        "text": "=Nome do cliente: {{ $('Processar Cada Agendamento').item.json.nome }}\nServiço agendado: {{ $('Processar Cada Agendamento').item.json.servico }}\nData e hora atuais: {{ $now.toISO() }}\nData e hora do agendamento atual: {{ $('Processar Cada Agendamento').item.json.data }}\nResposta do cliente ao lembrete: {{ $json.resposta_cliente }}",
+        "text": "=Nome do cliente: {{ $('Processar Cada Agendamento').item.json.nome }}\nServiço agendado: {{ $('Processar Cada Agendamento').item.json.servico }}\nData e hora atuais: {{ $now.toISO() }}\nData e hora do agendamento atual: {{ $('Processar Cada Agendamento').item.json.data }}\nResposta do cliente ao lembrete: {{ $('Normalizar Resposta do Lembrete').item.json.resposta_cliente }}",
         "hasOutputParser": true,
         "options": {
           "systemMessage": "Você é o Zap, assistente virtual de agendamento de uma barbearia. Nesta etapa, você classifica a resposta de um cliente a um lembrete de agendamento em uma de quatro categorias:\n- \"confirmar\" — o cliente confirmou o horário\n- \"cancelar\" — o cliente não vai mais\n- \"remarcar\" — o cliente quer outro dia/horário\n- \"indefinido\" — resposta realmente ambígua ou que não indica nenhuma das anteriores\n\nREGRAS DE CLASSIFICAÇÃO (não mude esta lógica, só a redação da resposta ao cliente):\n- Se a resposta do cliente for apenas um emoji (ou combinação de emojis) sem texto, ou uma expressão curta de agradecimento/confirmação (ex: \"ok\", \"blz\", \"obrigado\", \"👍\", \"🙏\") — normalmente o cliente só está reconhecendo a mensagem, sem pedir cancelamento ou remarcação — trate como confirmação implícita do agendamento: decisao = \"confirmar\".\n- decisao = \"indefinido\" fica reservada só para respostas realmente ambíguas ou que não indicam confirmar/cancelar/remarcar de forma alguma — nunca para reações curtas como essas.\n- Se o cliente quiser remarcar e sugerir um novo dia/horário, converta para data e hora absolutas em ISO 8601 (novo_horario_inicio/novo_horario_fim), usando a data e hora atuais informadas como referência, assumindo 1 hora de duração.\n\nCONFIRMACAO_TEXTO — mensagem curta, natural e cordial em português para enviar ao cliente, como se um atendente de verdade estivesse digitando no WhatsApp. Escreva como uma frase corrida e espontânea, nunca como um formulário preenchido ou template com lacunas.\n\nVARIEDADE E TOM (vale para toda confirmacao_texto, em qualquer decisao):\n- Nunca repita a mesma estrutura de frase, a mesma palavra de abertura (\"Perfeito\", \"Combinado\", \"Prontinho\", \"Tudo bem\") ou a mesma ordem de informações em mensagens seguidas — varie a forma de começar e de organizar a frase a cada resposta, como uma pessoa de verdade escreveria. Os exemplos abaixo mostram só o formato esperado — nunca copie o texto deles literalmente.\n- Use o nome do cliente de forma natural, mas não é obrigatório em toda mensagem — um atendente de verdade não repete o nome do outro em cada frase. Priorize usar o nome ao confirmar algo importante ou ao acolher o cliente numa remarcação de última hora.\n- Seja especialmente acolhedor quando o cliente pede para remarcar em cima da hora (pouco tempo antes do horário já agendado) — reconheça a situação com empatia antes de confirmar, em vez de responder de forma seca.\n\nRegras por decisao:\n- decisao = \"confirmar\": confirme de forma calorosa e breve que o horário está garantido. Exemplos (varie entre estilos assim): \"Perfeito, te espero por aqui!\" / \"Combinado, {{ nome }}! Até já.\" / \"Show, contando com você!\" — inclusive quando a confirmação veio de um emoji ou \"ok\" (ex: \"Por nada, até lá! 😊\", \"Fico à disposição!\").\n- decisao = \"cancelar\": confirme o cancelamento de forma gentil, sem soar burocrático, e deixe claro que o cliente pode remarcar quando quiser. Exemplos: \"Tudo bem, cancelei aqui pra você. Quando quiser remarcar é só chamar!\" / \"Combinado, seu horário foi cancelado sem problema. Te espero quando quiser voltar.\"\n- decisao = \"remarcar\" e um novo horário foi identificado: escreva uma frase curta e natural PERGUNTANDO se pode confirmar a mudança para o novo dia/horário, por extenso em português (ex: \"quinta-feira, dia 19 de setembro, às 10h\"), incorporado numa frase fluida — NUNCA diga que já foi remarcado, você está só propondo, ainda falta o cliente confirmar numa mensagem separada. Se o pedido for de última hora, reconheça isso com empatia antes de perguntar (ex.: \"Sem problema, dá tempo sim! Ficaria pra quinta às 10h — posso confirmar?\" em vez de só cravar a nova data/hora seca). Este texto só é enviado se o novo horário realmente estiver disponível; a remarcação de fato só acontece depois que o cliente responder confirmando essa pergunta.\n- decisao = \"indefinido\": não gere confirmacao_texto de confirmação — este caso não usa o campo (a pergunta de esclarecimento ao cliente já é tratada por outro node do fluxo).\n\nSe não for possível classificar com clareza, responda decisao como \"indefinido\"."
@@ -239,7 +239,7 @@
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.4,
       "position": [1944, 296],
-      "parameters": { "sessionIdType": "customKey" }
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "={{ 'lembrete-' + $('Processar Cada Agendamento').item.json.telefone + '-' + $('Processar Cada Agendamento').item.json.event_id }}" }
     },
     {
       "id": "ed75a89f-c2b0-47c7-9090-3bcaeb544df7",
@@ -843,136 +843,6 @@
       }
     },
     {
-      "id": "b1c2d3e4-1111-4bbb-8ccc-111111111111",
-      "name": "Checar Mensagem Duplicada",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [1584, 650],
-      "alwaysOutputData": true,
-      "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": { "__rl": true, "mode": "id", "value": "t8JczdWqhOODNWjo" },
-        "filters": { "conditions": [{ "keyName": "message_id", "condition": "eq", "keyValue": "={{ $json.message_id }}" }] },
-        "returnAll": false,
-        "limit": 1
-      }
-    },
-    {
-      "id": "b1c2d3e4-2222-4bbb-8ccc-222222222222",
-      "name": "Mensagem Já Processada?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [1696, 650],
-      "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "combinator": "and",
-          "conditions": [
-            { "leftValue": "={{ $json.message_id }}", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }, "rightValue": "" }
-          ]
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "b1c2d3e4-3333-4bbb-8ccc-333333333333",
-      "name": "Ignorar Mensagem Duplicada",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [1696, 750],
-      "parameters": {}
-    },
-    {
-      "id": "b1c2d3e4-4444-4bbb-8ccc-444444444444",
-      "name": "Registrar Mensagem Processada",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [1808, 650],
-      "parameters": {
-        "resource": "row",
-        "operation": "insert",
-        "dataTableId": { "__rl": true, "mode": "id", "value": "t8JczdWqhOODNWjo" },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "message_id": "={{ $('Normalizar Resposta do Lembrete').item.json.message_id }}",
-            "processado_em": "={{ $now.toISO() }}"
-          },
-          "schema": [
-            { "id": "message_id", "displayName": "message_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "processado_em", "displayName": "processado_em", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "canBeUsedToMatch": false }
-          ]
-        }
-      }
-    },
-    {
-      "id": "b1c2d3e4-5555-4bbb-8ccc-555555555555",
-      "name": "Checar Lock do Telefone",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [1920, 650],
-      "alwaysOutputData": true,
-      "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": { "__rl": true, "mode": "id", "value": "IIzfVI1CvTwlAiSb" },
-        "filters": { "conditions": [{ "keyName": "telefone", "condition": "eq", "keyValue": "={{ $('Processar Cada Agendamento').item.json.telefone }}" }] },
-        "returnAll": false,
-        "limit": 1
-      }
-    },
-    {
-      "id": "b1c2d3e4-6666-4bbb-8ccc-666666666666",
-      "name": "Telefone Ocupado?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [2032, 650],
-      "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "combinator": "and",
-          "conditions": [
-            { "leftValue": "={{ $json.bloqueado_em ? (DateTime.fromISO($json.bloqueado_em) > DateTime.now().minus({ seconds: 30 })) : false }}", "operator": { "type": "boolean", "operation": "equals" }, "rightValue": true }
-          ]
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "b1c2d3e4-7777-4bbb-8ccc-777777777777",
-      "name": "Ignorar Mensagem (Telefone Ocupado)",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [2032, 750],
-      "parameters": {}
-    },
-    {
-      "id": "b1c2d3e4-8888-4bbb-8ccc-888888888888",
-      "name": "Registrar Lock do Telefone",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
-      "position": [2144, 650],
-      "parameters": {
-        "resource": "row",
-        "operation": "upsert",
-        "dataTableId": { "__rl": true, "mode": "id", "value": "IIzfVI1CvTwlAiSb" },
-        "matchType": "allConditions",
-        "filters": { "conditions": [{ "keyName": "telefone", "condition": "eq", "keyValue": "={{ $('Processar Cada Agendamento').item.json.telefone }}" }] },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "telefone": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
-            "bloqueado_em": "={{ $now.toISO() }}"
-          },
-          "schema": [
-            { "id": "telefone", "displayName": "telefone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
-            { "id": "bloqueado_em", "displayName": "bloqueado_em", "required": false, "defaultMatch": false, "display": true, "type": "dateTime", "canBeUsedToMatch": false }
-          ]
-        }
-      }
-    },
-    {
       "id": "b3dca74f-0127-4117-9ba4-3e294440bbc7",
       "name": "Ativar Indicador de Digitação",
       "type": "n8n-nodes-base.httpRequest",
@@ -1027,25 +897,7 @@
       ]
     },
     "Avisar Timeout do Lembrete no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
-    "Normalizar Resposta do Lembrete": { "main": [[{ "node": "Checar Mensagem Duplicada", "type": "main", "index": 0 }]] },
-    "Checar Mensagem Duplicada": { "main": [[{ "node": "Mensagem Já Processada?", "type": "main", "index": 0 }]] },
-    "Mensagem Já Processada?": {
-      "main": [
-        [{ "node": "Ignorar Mensagem Duplicada", "type": "main", "index": 0 }],
-        [{ "node": "Registrar Mensagem Processada", "type": "main", "index": 0 }]
-      ]
-    },
-    "Ignorar Mensagem Duplicada": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
-    "Registrar Mensagem Processada": { "main": [[{ "node": "Checar Lock do Telefone", "type": "main", "index": 0 }]] },
-    "Checar Lock do Telefone": { "main": [[{ "node": "Telefone Ocupado?", "type": "main", "index": 0 }]] },
-    "Telefone Ocupado?": {
-      "main": [
-        [{ "node": "Ignorar Mensagem (Telefone Ocupado)", "type": "main", "index": 0 }],
-        [{ "node": "Registrar Lock do Telefone", "type": "main", "index": 0 }]
-      ]
-    },
-    "Ignorar Mensagem (Telefone Ocupado)": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
-    "Registrar Lock do Telefone": { "main": [[{ "node": "Ativar Indicador de Digitação", "type": "main", "index": 0 }]] },
+    "Normalizar Resposta do Lembrete": { "main": [[{ "node": "Ativar Indicador de Digitação", "type": "main", "index": 0 }]] },
     "Ativar Indicador de Digitação": { "main": [[{ "node": "Classificar Resposta do Lembrete", "type": "main", "index": 0 }]] },
     "Classificar Resposta do Lembrete": { "main": [[{ "node": "Confirmar, Cancelar ou Remarcar?", "type": "main", "index": 0 }]] },
     "Modelo Claude para Classificação": { "ai_languageModel": [[{ "node": "Classificar Resposta do Lembrete", "type": "ai_languageModel", "index": 0 }]] },

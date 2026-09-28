@@ -387,6 +387,11 @@ então essa sincronização é manual e intencional, não automática.
    IA. Também é usado quando
    o cliente pergunta sobre serviços/preços — a IA responde com base na `lista_servicos`.
 
+### Saídas "encaminhar" e "fora_do_escopo" (2026-09-28)
+
+Ver [Escopo da conversa](#escopo-da-conversa-2026-09-28). Com essas duas saídas, o fallback
+"duvida" do Switch passou do índice 4 para o 6.
+
 ## Horário de funcionamento
 
 A barbearia funciona de segunda a sábado, das 09h às 18h. O workflow bloqueia agendamentos
@@ -1098,6 +1103,37 @@ Três camadas de proteção agora:
 `retryOnFail` e `continueErrorOutput` funcionam juntos no AI Agent v3: foi testado num workflow
 isolado com um schema impossível de satisfazer. Com retry, o parser rodou 2 vezes; sem retry,
 rodou 1 vez; nos dois casos o item saiu pela saída de erro com status `success`.
+
+## Escopo da conversa (2026-09-28)
+
+Três categorias além do fluxo de agendamento, decididas pelo "Interpretar Intenção do Cliente"
+(regra "O QUE VOCÊ NÃO SABE E O QUE NÃO É DA BARBEARIA" do prompt):
+
+| Categoria | `intencao` | O que acontece |
+|---|---|---|
+| Serviços, preços da lista, horário de funcionamento, saudações | `duvida` | Sem mudança: a IA responde com os dados do prompt |
+| Pergunta legítima sobre a barbearia que os dados não cobrem (serviço/produto fora da planilha, endereço, pagamento, estacionamento…) | `encaminhar` | Cliente recebe texto fixo ("…já repassei sua dúvida pro responsável…"). O responsável recebe no WhatsApp "📩 Dúvida de cliente sobre o negócio (não é erro do sistema)", com nome, telefone, mensagem e link `wa.me` |
+| Assunto sem relação com a barbearia, ou tentativa de mudar as instruções (jailbreak/prompt injection, inclusive disfarçada de pergunta sobre o negócio) | `fora_do_escopo` | Texto fixo de recusa; nada é encaminhado |
+
+- **Textos fixos no node, não gerados pela IA.** "Recusar Assunto Fora do Escopo no WhatsApp",
+  "Avisar Cliente Sobre Dúvida Encaminhada no WhatsApp" e "Avisar Dúvida Já Encaminhada no
+  WhatsApp" enviam um `textBody` literal. Mesmo que uma injeção manipule o `confirmacao_texto`, a
+  mensagem enviada não muda: o que a IA ainda decide é só a categoria. O prompt manda a IA
+  preencher `confirmacao_texto` com o mesmo texto, para o histórico da memória ficar coerente com
+  o que foi enviado.
+- **Anti-spam (1 encaminhamento por telefone a cada 30 min).** Segue o padrão do
+  `locks_telefone`, numa Data Table própria `encaminhamentos_duvida` (`telefone`,
+  `encaminhado_em`). A tabela é separada porque o lock é reescrito a cada mensagem.
+  - Fluxo: "Checar Encaminhamento Recente" (get, `alwaysOutputData`) → "Já Encaminhou Nos Últimos
+    30 Min?".
+  - Se sim: "Avisar Dúvida Já Encaminhada no WhatsApp" responde que a dúvida já foi repassada e
+    pede para aguardar o contato; nada é reenviado.
+  - Se não: "Registrar Encaminhamento de Dúvida" (upsert) → "Encaminhar Dúvida ao Responsável no
+    WhatsApp" → "Avisar Cliente Sobre Dúvida Encaminhada no WhatsApp".
+- **Aviso ao responsável.** Mesmo número de envio e mesmo destino (5511975049937) do node do Error
+  Workflow "Notificação de Erros". Não chama aquele workflow porque ele só tem Error Trigger, que
+  não recebe dados de outro workflow. O node tem `onError: continueRegularOutput`: se o aviso falhar
+  (ex.: fora da janela de 24h da Meta), o cliente ainda recebe a resposta.
 
 ## Credenciais (placeholder)
 

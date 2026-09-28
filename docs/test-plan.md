@@ -158,6 +158,21 @@ parâmetro voltou idêntico.
 
 ## Registro de execuções
 
+### 2026-09-28 (tarde, 5) — sem nomes próprios fixos nos exemplos de saudação do prompt
+
+Nomes fixos nos exemplos do prompt podem vazar para a resposta de um cliente real, como aconteceu
+com "Ana" no lembrete. Os 6 "José!" (publicado em `8f682cee`) e os 2 "Maria!" dos exemplos de
+saudação de `Interpretar Intenção do Cliente` viraram "Cliente!".
+
+"Ana"/"Pedro" continuam **só** como exemplos do formato do campo `beneficiario` ("Nome - vínculo").
+
+Versão testada: Agendamento `8cb4ef4c` (testada como rascunho; publicada em 28/09 depois desta rodada, substituindo `8f682cee`). O prompt ao vivo foi conferido byte a byte com
+o do repo, e só esse node mudou.
+
+| # | Resultado | Evidência (execução) |
+|---|---|---|
+| 1 (regressão) | ✅ Perfil "Rafael", "quero marcar um corte 3D quinta às 15h" → 01/10 15:00–15:40, `confirmado: false`, "Oi, Rafael! O Corte 3D na quinta-feira, dia 01 de outubro, às 15h está disponível — posso confirmar pra você?" → `Propor Horário`; nenhum nome dos exemplos | 1295 |
+
 ### 2026-09-28 (tarde, 4) — telefone numérico quebrava os envios do Lembrete (execução 1203)
 
 No lembrete de produção das 8h (execução 1203), o cliente respondeu "confirmar" duas vezes e a

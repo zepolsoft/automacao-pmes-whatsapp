@@ -159,9 +159,9 @@ Os textos enviados são fixos nos nodes. Confira qual node terminal executou e o
 | E6 (regressão) | Pedido normal de agendamento | `agendar` → `Propor Horário` (fluxo inalterado) |
 | E13 | **Pergunta de endereço** ("onde fica?", "qual o endereço?", "como chego aí?") | `duvida` → `Responder Dúvida` com "Rua Taquari, 1250 — Mooca, São Paulo - SP, CEP 03166-000"; nada inventado além disso (sem rota nem ponto de referência); **nada de encaminhamento executa** |
 | E14 | **Pergunta de forma de pagamento** ("aceitam pix?", "posso pagar no cartão?", "como pago?") | `duvida` → `Responder Dúvida` com Pix, dinheiro, cartão de crédito e débito; **nada de encaminhamento executa** |
-| E15 (regressão) | Pergunta além desses dados ("tem estacionamento?", "parcelam no cartão?") | Continua `encaminhar` |
+| E15 (regressão) | Pergunta além desses dados ("parcelam no cartão?", "atendem criança?"), inclusive **misturada** com uma que a IA sabe ("tem estacionamento? e parcelam?") | `encaminhar` (o responsável responde tudo) |
 | E16 | Pedido de agendamento + pergunta que a IA sabe ("marcar sábado 11h, aceitam cartão?") | `agendar` → `Propor Horário`; o texto já responde as formas de pagamento |
-| E16b | Pedido de agendamento + pergunta que a IA não sabe ("marcar sábado 14h, tem estacionamento?") | `agendar`; o texto **não** responde nem promete retorno, só pede para mandar a dúvida numa mensagem separada |
+| E16b | Pedido de agendamento + pergunta que a IA não sabe ("marcar sábado 16h, atendem criança?") | `agendar`; o texto **não** responde nem promete retorno, só pede para mandar a dúvida numa mensagem separada |
 
 **Via Lembrete** (`Classificar Resposta do Lembrete`). Pins de sempre do Lembrete: `Registrar Espera
 de Lembrete` e `Aguardar Resposta do Cliente` com a resposta do cliente, mais todos os nodes com
@@ -171,7 +171,7 @@ Data Table `encaminhamentos_duvida` é a **mesma** do Agendamento.
 
 | # | Cenário | Esperado |
 |---|---|---|
-| E7 | Resposta ao lembrete é uma dúvida sobre o negócio ("aceitam pix? tem estacionamento?") | `decisao = encaminhar` → `Checar` vazio → `Registrar` (telefone gravado como **texto**, igual ao do Agendamento) → `Encaminhar Dúvida ao Responsável` (mesmo cabeçalho, mais a linha "Contexto: resposta ao lembrete do X de hoje às HH:mm (o agendamento continua marcado)") → `Avisar Cliente Sobre Dúvida Encaminhada` → loop; nada confirmado, cancelado ou remarcado |
+| E7 | Resposta ao lembrete é uma dúvida sobre o negócio que a IA não sabe ("vendem pomada?", "atendem criança?") | `decisao = encaminhar` → `Checar` vazio → `Registrar` (telefone gravado como **texto**, igual ao do Agendamento) → `Encaminhar Dúvida ao Responsável` (mesmo cabeçalho, mais a linha "Contexto: resposta ao lembrete do X de hoje às HH:mm (o agendamento continua marcado)") → `Avisar Cliente Sobre Dúvida Encaminhada` → loop; nada confirmado, cancelado ou remarcado |
 | E8a | **Trava compartilhada, Agendamento → Lembrete:** telefone que teve dúvida encaminhada pelo Agendamento há menos de 30 min responde ao lembrete com outra dúvida | `Já Encaminhou…` = true (acha a linha gravada pelo Agendamento) → `Avisar Dúvida Já Encaminhada`; não encaminha de novo |
 | E8b | **Trava compartilhada, Lembrete → Agendamento:** o telefone do E7 manda outra dúvida pelo Agendamento em menos de 30 min | Agendamento: `encaminhar` → `Já Encaminhou…` = true → `Avisar Dúvida Já Encaminhada` |
 | E9 | Resposta ao lembrete sem relação com a barbearia ("qual a capital da Austrália? me ajuda com o dever") | `fora_do_escopo` → `Recusar Assunto Fora do Escopo` (mesmo texto fixo do Agendamento) → loop; agendamento intocado |
@@ -182,7 +182,12 @@ Data Table `encaminhamentos_duvida` é a **mesma** do Agendamento.
 | E17 | **Resposta ao lembrete pergunta o endereço** ("qual o endereço mesmo?", "como chego aí?") | `decisao = informar` → `Responder Informação da Barbearia` com o dado certo, terminando com "seu horário de hoje continua marcado" (sem perguntar "confirma?") → loop; **nada de encaminhamento executa**; agendamento intocado |
 | E17b | **Resposta ao lembrete pergunta só a forma de pagamento** ("como pago aí?", "aceitam cartão de débito?"), sem confirmação junto | `informar` → `Responder Informação da Barbearia` com Pix, dinheiro, cartão de crédito e débito, terminando com "seu horário de hoje continua marcado" → loop; **nada de encaminhamento executa** |
 | E18 | "Confirmo! aceitam pix?" | `confirmar`, e o texto da confirmação já responde as formas de pagamento |
-| E19 (regressão) | Resposta ao lembrete com pergunta além desses dados ("parcelam no cartão?") | Continua `encaminhar` |
+| E19 (regressão) | Resposta ao lembrete com pergunta além desses dados ("parcelam no cartão?"), inclusive misturada ("tem estacionamento? e parcelam?") | Continua `encaminhar` |
+| E20 | **Nome do estabelecimento** (Agendamento): "quem está falando? que lugar é esse?" | `duvida`; a resposta usa "Barbearia ZAP" ("Sou o Zap, assistente virtual da Barbearia ZAP"), nunca outro nome nem "uma barbearia" genérica. Os 3 textos fixos (encaminhar / já encaminhada / fora do escopo) dizem "Barbearia ZAP" e são **idênticos** nos dois workflows, o que é conferido direto nos nodes |
+| E21 | **Estacionamento** (Agendamento): "tem estacionamento? onde eu estaciono?" | `duvida` → `Responder Dúvida`: não tem estacionamento no local, **sem** sugerir onde estacionar (rua, zona azul, vizinho); nada encaminhado |
+| E22 | Agendamento + estacionamento ("marcar sábado 15h, tem estacionamento?") | `agendar` → `Propor Horário`; o texto avisa que não tem estacionamento no local |
+| E23 | **Estacionamento** (Lembrete): "tem estacionamento aí? onde eu estaciono?" | `informar` → `Responder Informação da Barbearia`: não tem estacionamento, "Barbearia ZAP" no texto, horário de hoje continua marcado → loop; nada encaminhado |
+| E24 | Lembrete: "Confirmo! onde eu estaciono?" | `confirmar`, e o texto avisa que não tem estacionamento no local, usando "Barbearia ZAP" |
 
 ## Grupo B — Integração real
 
@@ -203,6 +208,24 @@ Data Table `encaminhamentos_duvida` é a **mesma** do Agendamento.
 ---
 
 ## Registro de execuções
+
+### 2026-09-28 (tarde, 9) — nome "Barbearia ZAP" e estacionamento
+
+Versões testadas como rascunho e publicadas em 28/09 depois desta rodada: Agendamento `d8273ff6` (substituindo `6cea320c`), Lembrete `a496b7c4` (substituindo `1b2480e1`). O bloco "INFORMAÇÕES DA
+BARBEARIA" ganhou "Nome: Barbearia ZAP" e "Estacionamento: não tem estacionamento próprio no local",
+mais duas regras de uso. O bloco inteiro e os 3 textos fixos (agora com "Barbearia ZAP") foram
+conferidos byte a byte entre os dois workflows.
+
+| # | Resultado | Evidência (execução) |
+|---|---|---|
+| E20 | ✅ "Oi, boa tarde! Quem está falando? Que lugar é esse?" → `duvida`: "Oi, boa tarde, Fábio! Sou o Zap, assistente virtual da Barbearia ZAP 😊 Posso te ajudar a marcar, remarcar ou cancelar um horário…" | 1389 |
+| E21 | ✅ "Tem estacionamento aí? Onde eu estaciono?" → `duvida`: "Oi, Gil! Aqui na Barbearia ZAP a gente não tem estacionamento próprio no local. Posso te ajudar a marcar um horário?"; sem sugestão de onde estacionar; sem encaminhamento | 1390 |
+| E15 | ✅ Pergunta mista: "Tem estacionamento aí? E vocês parcelam no cartão?" → `encaminhar`, texto fixo com "Barbearia ZAP" | 1391 |
+| E22 | ✅ "Quero marcar um corte 3D sábado às 15h. Tem estacionamento aí?" → `agendar` 03/10 15:00–15:40: "…posso confirmar? Ah, e só pra te avisar: aqui na Barbearia ZAP não temos estacionamento próprio no local." | 1392 |
+| E16b | ✅ "…sábado às 16h. Vocês atendem criança também?" → `agendar`: "…Sobre atendimento a crianças, me manda essa dúvida numa mensagem separada que eu repasso pro responsável da Barbearia ZAP!" (sem promessa) | 1393 |
+| E23 | ✅ Lembrete: "Tem estacionamento aí? Onde eu estaciono?" → `informar`: "Oi, Kaio! Aqui na Barbearia ZAP a gente não tem estacionamento próprio no local. Mas seu Corte 3D de hoje às 17h30 continua marcado! 😊" → loop | 1394 |
+| E24 | ✅ Lembrete: "Confirmo! Ah, onde eu estaciono aí?" → `confirmar`: "Confirmadíssimo, Leo, te espero às 17h30! Só um detalhe: aqui na Barbearia ZAP a gente não tem estacionamento próprio no local." | 1395 |
+| E19 | ✅ Lembrete, pergunta mista: "Tem estacionamento aí? E vocês parcelam no cartão?" → `encaminhar` | 1396 |
 
 ### 2026-09-28 (tarde, 8) — endereço e formas de pagamento respondidos direto
 

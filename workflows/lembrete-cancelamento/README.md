@@ -682,7 +682,7 @@ decisões do "Classificar Resposta do Lembrete":
 - **Trava de 30 min compartilhada**: usa a **mesma** Data Table `encaminhamentos_duvida`
   (`LIsp5qJ88DxWRnOY`), com o telefone gravado como texto (`String(...)`), igual ao Agendamento.
   Um encaminhamento feito por qualquer um dos dois workflows bloqueia o outro pelo mesmo telefone.
-- **`informar`** (desde 28/09): pergunta sobre endereço ou formas de pagamento, que a IA sabe
+- **`informar`** (desde 28/09): pergunta sobre endereço, formas de pagamento ou estacionamento ("não tem estacionamento no local"), que a IA sabe
   responder pelo bloco "INFORMAÇÕES DA BARBEARIA" do prompt, igual ao do Agendamento. O fluxo é
   "Responder Informação da Barbearia no WhatsApp", com o `confirmacao_texto` da IA, e volta para o
   loop.

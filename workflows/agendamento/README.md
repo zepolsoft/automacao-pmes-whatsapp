@@ -1111,8 +1111,8 @@ Três categorias além do fluxo de agendamento, decididas pelo "Interpretar Inte
 
 | Categoria | `intencao` | O que acontece |
 |---|---|---|
-| Serviços, preços da lista, horário de funcionamento, saudações | `duvida` | Sem mudança: a IA responde com os dados do prompt |
-| Pergunta legítima sobre a barbearia que os dados não cobrem (serviço/produto fora da planilha, endereço, pagamento, estacionamento…) | `encaminhar` | Cliente recebe texto fixo ("…já repassei sua dúvida pro responsável…"). O responsável recebe no WhatsApp "📩 Dúvida de cliente sobre o negócio (não é erro do sistema)", com nome, telefone, mensagem e link `wa.me` |
+| Serviços, preços da lista, horário de funcionamento, saudações, **endereço e formas de pagamento** (bloco "INFORMAÇÕES DA BARBEARIA" do prompt, desde 28/09) | `duvida` | A IA responde direto com os dados do prompt, sem acrescentar nada (ex.: rota, parcelamento) |
+| Pergunta legítima sobre a barbearia que os dados não cobrem (serviço/produto fora da planilha, estacionamento, parcelamento…) | `encaminhar` | Cliente recebe texto fixo ("…já repassei sua dúvida pro responsável…"). O responsável recebe no WhatsApp "📩 Dúvida de cliente sobre o negócio (não é erro do sistema)", com nome, telefone, mensagem e link `wa.me` |
 | Assunto sem relação com a barbearia, ou tentativa de mudar as instruções (jailbreak/prompt injection, inclusive disfarçada de pergunta sobre o negócio) | `fora_do_escopo` | Texto fixo de recusa; nada é encaminhado |
 
 - **Textos fixos no node, não gerados pela IA.** "Recusar Assunto Fora do Escopo no WhatsApp",

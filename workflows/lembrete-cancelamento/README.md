@@ -682,12 +682,20 @@ decisões do "Classificar Resposta do Lembrete":
 - **Trava de 30 min compartilhada**: usa a **mesma** Data Table `encaminhamentos_duvida`
   (`LIsp5qJ88DxWRnOY`), com o telefone gravado como texto (`String(...)`), igual ao Agendamento.
   Um encaminhamento feito por qualquer um dos dois workflows bloqueia o outro pelo mesmo telefone.
-- **Decisão mais pergunta** ("Confirmo! aceitam pix?"): a decisão é aplicada e a pergunta **não** é
-  encaminhada. A IA não promete retorno; pede para o cliente mandar a dúvida numa mensagem
-  separada, que cai no Agendamento.
+- **`informar`** (desde 28/09): pergunta sobre endereço ou formas de pagamento, que a IA sabe
+  responder pelo bloco "INFORMAÇÕES DA BARBEARIA" do prompt, igual ao do Agendamento. O fluxo é
+  "Responder Informação da Barbearia no WhatsApp", com o `confirmacao_texto` da IA, e volta para o
+  loop.
+  - A resposta termina com "seu horário de hoje continua marcado", sem perguntar "confirma?": o
+    loop não espera outra resposta, e um "sim" cairia no Agendamento sem contexto.
+  - Se o endereço ou as formas de pagamento mudarem, altere nos **dois** prompts.
+- **Decisão mais pergunta** ("Confirmo! aceitam pix?"): a decisão é aplicada.
+  - Se a pergunta for sobre endereço ou pagamento, a resposta vem na própria confirmação.
+  - Se for outra coisa, **não** é encaminhada: a IA não promete retorno e pede para o cliente mandar
+    a dúvida numa mensagem separada, que cai no Agendamento.
 - Todos os nodes novos têm `onError: continueRegularOutput`, para uma falha não parar o loop dos
-  outros lembretes. O fallback "Não Entendi" (Pedir Esclarecimento) passou do índice 3 para o 5
-  no Switch.
+  outros lembretes. O fallback "Não Entendi" (Pedir Esclarecimento) passou do índice 3 para o 5 no
+  Switch e, com a saída `informar` (índice 5), para o 6.
 
 ## Error Workflow centralizado (2026-09-24)
 

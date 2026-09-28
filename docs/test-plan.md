@@ -89,6 +89,11 @@ Até esse ambiente existir, o Grupo B fica **não executado** — não marcar co
 | 30e | Referência inequívoca ("cancela o Corte 3D de sexta") com 2+ ativos | Age direto no agendamento certo, sem perguntar |
 | 30f | Cliente com **um único** agendamento ativo: "cancelar meu horário" | Usa esse, sem perguntar à toa |
 | 30g | Pergunta de escolha com data numérica na frase da IA ("dia 02/10") | `mensagem_escolha` troca pela pergunta montada pelo código, com dia por extenso |
+| 31a | **Beneficiário resolve sozinho** — 2+ ativos, só um com `beneficiario` "Esposa" (e só um "Filho"); "cancela o corte da minha esposa" / "quero remarcar o do meu filho pra sexta às 15h". Fixe a coluna `beneficiario` nas linhas de `Buscar Agendamentos Ativos do Cliente` e `Buscar Agendamento para Cancelar/Remarcar` | Age direto no agendamento certo, **sem perguntar**: `Cancelar Evento` com o `event_id` da esposa / remarcação do filho proposta (`Propor Horário`) |
+| 31b | **Ambiguidade real mesmo com o campo** — dois agendamentos "Filho"; "cancela o do meu filho" / "preciso remarcar o do meu filho" | `agendamento_alvo = ""` → `Perguntar Qual Agendamento no WhatsApp` listando **só os dois do filho**; nada cancelado/atualizado |
+| 31c | Um "Esposa" + uma linha antiga sem beneficiário no mesmo dia; "cancela o da minha esposa" | Age no "Esposa" (a linha antiga não casa com nenhum beneficiário) |
+| 31d | Todas as linhas antigas, sem beneficiário (dados reais de 28/09); "cancela o da minha esposa" | Pergunta qual — não deduz pelo tipo de serviço (ex.: "Corte Feminino") |
+| 31e | Agendar para outra pessoa: "Corte Feminino Com Lavagem pra minha esposa Ana amanhã às 10h" → "Sim" | `beneficiario: "Ana - esposa"` na proposta e no "sim"; proposta menciona a Ana; `Salvar Cliente` grava `beneficiario` (Grupo B: conferir na planilha real) |
 
 ## Grupo B — Integração real
 
@@ -102,11 +107,30 @@ Até esse ambiente existir, o Grupo B fica **não executado** — não marcar co
 | 23 | Erro real (ex.: credencial inválida) | Notificação de erro chega no WhatsApp |
 | 25b | Mensagem enviada entre 23h e 1h ("amanhã às 10h") | IA resolve "amanhã" pelo relógio real de São Paulo |
 | 26 | Webhook do WhatsApp reenviando a mesma mensagem | Dedup por `message_id`; nenhum agendamento duplicado |
+| 31f | Agendamento real para outra pessoa, depois remarcado e cancelado | Planilha grava `beneficiario` na coluna J na criação; remarcar/cancelar **não apagam** a coluna J |
 | 29 | Falha real de formato da IA em produção | Cliente recebe o aviso de que a equipe vai responder e a notificação do Error Workflow chega no WhatsApp do responsável com telefone + mensagem do cliente |
 
 ---
 
 ## Registro de execuções
+
+### 2026-09-28 (tarde, 2) — coluna `beneficiario` como critério de desambiguação
+
+Versão testada: Agendamento `cce566bd` (testada como rascunho; publicada em 28/09 depois desta
+rodada, substituindo `78e5f496`). Coluna `beneficiario` já criada em J1 na planilha real (linhas existentes ficaram
+vazias). Execuções às ~11h50 de São Paulo.
+
+| # | Resultado | Evidência (execução) |
+|---|---|---|
+| 31a | ✅ "Cancela o corte da minha esposa" (só um "Esposa") → cancelou direto `evtFemininoHoje`; "Quero remarcar o do meu filho pra sexta às 15h" (só um "Filho") → alvo `evtSocialSabado`, 02/10 15:00–15:35, `Propor Horário` | 1262, 1263 |
+| 31b | ✅ "Cancela o do meu filho" e "Preciso remarcar o do meu filho" (dois "Filho") → "Seu filho tem dois horários marcados: o Corte Baixo na Máquina hoje às 15h e o Corte Social na Tesoura no sábado, dia 10 de outubro, às 9h. Qual deles…?"; nada alterado | 1264, 1269 |
+| 31c | ✅ "Esposa" + linha antiga → cancelou o "Esposa" (com a regra final; na 1ª versão do prompt a regra mandava perguntar e a IA não seguiu — ajustada para o comportamento atual) | 1265, 1268 |
+| 31d | ✅ Todas as linhas antigas → "Não consegui identificar qual é o da sua esposa… Qual deles é o dela?"; nada cancelado | 1267 |
+| 31e | ✅ Proposta "Corte Feminino Com Lavagem pra Ana amanhã às 10h — posso confirmar?" com `beneficiario: "Ana - esposa"`; no "Sim", `confirmado: true` e `beneficiario` mantido → `Criar Evento` → `Salvar Cliente` (fixado; valor gravado não verificado na planilha real) | 1266, 1270 |
+
+Verificação de estado real (somente leitura, workflow temporário arquivado): evento
+`oi7l48sa9r4o86qmtaurtb0nbo` (Corte 3D 02/10 11h) segue `status: "cancelled"`, sem alteração
+desde 12:02:35 UTC. **Não restaurado.**
 
 ### 2026-09-28 (tarde) — não adivinhar qual agendamento cancelar/remarcar (execução 1246)
 

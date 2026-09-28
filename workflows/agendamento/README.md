@@ -66,6 +66,7 @@ abaixo.
 | `preco` | lê (remarcar/cancelar, para reescrever sem alterar) | escreve | calculado 1x na criação (lookup na planilha de serviços); nunca recalculado depois |
 | `criado_em` | lê (remarcar/cancelar, para reescrever sem alterar) | escreve | gravado 1x na criação, nunca muda depois |
 | `atualizado_em` | — | escreve | em toda remarcação/cancelamento |
+| `beneficiario` (coluna J, 2026-09-28) | lê (antes da IA, na lista de agendamentos ativos) | escreve (só na criação) | "Eu mesmo" por padrão; "Nome - vínculo" ou só o vínculo quando é para outra pessoa. Remarcar/cancelar não mexem nela (fica à direita de `atualizado_em`, fora do range dos updates) |
 
 Na saída "consultar", **Buscar Agendamentos do Cliente (Consultar)** lê `telefone`, `servico`,
 `data` e `status` de todas as linhas do cliente (sem filtro de status na própria busca — o
@@ -1040,6 +1041,30 @@ Limit existia no caminho de remarcar.
    - Agendamento com horário já passado não entra na lista (nem no prompt).
 4. **Confirmar Cancelamento no WhatsApp** deixou de usar a frase da IA: monta o texto com o
    serviço, o dia e o horário da linha que foi de fato cancelada.
+
+### Beneficiário (2026-09-28)
+
+Coluna `beneficiario` (J) na planilha "Clientes - Automação PMEs": para quem é o atendimento.
+
+- **Criação:** a IA preenche o campo novo `beneficiario` do schema. O padrão é "Eu mesmo". Se o
+  cliente diz que é para outra pessoa, vai "Nome - vínculo" quando ele dá o nome ("Ana - esposa")
+  ou só o vínculo quando não dá ("Esposa", "Filho", "Pai"). "Salvar Cliente na Planilha" grava o
+  valor, com "Eu mesmo" se vier vazio. "Criar Evento no Calendar" acrescenta "Para: …" na
+  descrição do evento quando não é o próprio cliente. A proposta e a confirmação mencionam a
+  pessoa ("…pra Ana amanhã às 10h").
+- **Desambiguação:** a lista de agendamentos ativos no prompt mostra `— para: <beneficiário>`, e a
+  regra "QUAL AGENDAMENTO CANCELAR OU REMARCAR" casa por beneficiário + serviço + data + horário.
+  Se só um agendamento é do beneficiário citado, age direto. Se sobrar mais de um (ex.: dois
+  "Filho"), pergunta listando só os que continuam possíveis. A pergunta do código e a confirmação
+  de cancelamento mostram "(para X)" quando não é o próprio cliente.
+- **Linhas antigas (vazias):** aparecem como "não informado" e não casam com nenhum beneficiário.
+  Se só um agendamento tem o beneficiário citado, é esse. Se nenhum tem e existem linhas "não
+  informado", a IA pergunta, sem deduzir pelo tipo de serviço. Esse é o caso de todas as linhas
+  que já existiam em 28/09; elas não foram preenchidas retroativamente, porque não dá para saber
+  de quem eram.
+- A coluna foi criada escrevendo só a célula J1, depois de confirmar que o cabeçalho tinha
+  exatamente as 9 colunas esperadas. Os updates dos dois workflows mapeiam até `atualizado_em`
+  (coluna I), então não apagam J (ver o bug de range do Update Row mais abaixo).
 
 Os nodes "Selecionar Agendamento Mais Recente (...)" foram renomeados para "Identificar
 Agendamento Escolhido (...)". As menções ao nome antigo nas seções de bugs anteriores descrevem o

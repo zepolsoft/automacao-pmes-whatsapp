@@ -183,7 +183,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const servico = $('Processar Cada Agendamento').item.json.servico; const horario = $('Processar Cada Agendamento').item.json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Processar Cada Agendamento').item.json.data).setZone('America/Sao_Paulo')) : ''; const opcoes = [ `Oi ${nome}! Não recebi resposta sobre o lembrete do seu horário de ${servico} hoje às ${horario}. Vou manter seu agendamento como está — qualquer coisa, é só me chamar por aqui! 😊`, `${nome}, não vi sua resposta por aqui, mas deixei seu horário de ${servico} hoje às ${horario} como estava. Qualquer mudança, é só falar comigo!`, `Oi ${nome}, tudo certo? Como não recebi retorno, mantive seu ${servico} de hoje às ${horario} confirmado. Pode me chamar se precisar mudar algo 😊` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
@@ -283,7 +283,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ $('Classificar Resposta do Lembrete').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
@@ -352,7 +352,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ $('Classificar Resposta do Lembrete').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
@@ -409,7 +409,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const opcoes = [ (nome ? `${nome}, esse` : `Esse`) + ` horário já passou ou está fora do nosso expediente (funcionamos de segunda a sábado, das 9h às 18h). Pode me dizer outro dia ou horário?`, `Esse horário não rola` + (nome ? `, ${nome}` : '') + ` — nosso expediente é de segunda a sábado, 9h às 18h. Qual outro horário funciona pra você?`, `Ops, estamos fechados nesse horário (atendemos seg-sáb, 9h às 18h)` + (nome ? `, ${nome}` : '') + `. Me diz outro dia ou horário que já verifico!` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
@@ -510,7 +510,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ $('Classificar Resposta do Lembrete').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
@@ -670,7 +670,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ $('Classificar Confirmação da Remarcação').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
@@ -685,7 +685,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const opcoes = [ `Oi` + (nome ? ` ${nome}` : '') + `! Não recebi sua confirmação sobre a remarcação, então mantive seu horário original como estava. Qualquer coisa, é só me chamar!`, (nome ? `${nome}, ` : ``) + `não vi sua resposta sobre a remarcação, então deixei seu horário original. Se ainda quiser mudar, é só falar comigo!` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
@@ -700,7 +700,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ $('Classificar Confirmação da Remarcação').item.json.output.confirmacao_texto }}",
         "additionalFields": {}
       }
@@ -716,7 +716,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const opcoes = [ (nome ? `Poxa, ${nome}, esse` : `Esse`) + ` novo horário já está ocupado! Pode me sugerir outro dia ou horário?`, `Ih, esse horário já foi preenchido` + (nome ? `, ${nome}` : '') + `! Tem outro dia ou horário em mente?`, (nome ? `${nome}, esse` : `Esse`) + ` horário não está mais livre. Qual outro você prefere?` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
@@ -783,7 +783,7 @@
       "parameters": {
         "operation": "send",
         "phoneNumberId": "1367004446487242",
-        "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
         "textBody": "={{ (() => { const a = $('Processar Cada Agendamento').item.json; const nome = a.nome || ''; const dt = DateTime.fromISO(a.data).setZone('America/Sao_Paulo'); const hora = dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`; const b = String(a.beneficiario ?? '').trim(); const para = b && b.toLowerCase() !== 'eu mesmo' ? ` (para ${b})` : ''; const qual = `${a.servico}${para} de hoje às ${hora}`; const opcoes = [ `Desculpa` + (nome ? `, ${nome}` : '') + `, não entendi bem. Sobre o ${qual}: você quer confirmar, cancelar ou remarcar?`, `Não peguei direito` + (nome ? `, ${nome}` : '') + `! Esse lembrete é do ${qual} — confirma, cancela ou prefere remarcar?`, `Só pra eu confirmar` + (nome ? `, ${nome}` : '') + `: sobre o ${qual}, você quer manter, cancelar ou remarcar?` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }

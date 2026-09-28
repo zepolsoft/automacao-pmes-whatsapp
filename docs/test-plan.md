@@ -152,10 +152,31 @@ parâmetro voltou idêntico.
 | 26 | Webhook do WhatsApp reenviando a mesma mensagem | Dedup por `message_id`; nenhum agendamento duplicado |
 | 31f | Agendamento real para outra pessoa, depois remarcado e cancelado | Planilha grava `beneficiario` na coluna J na criação; remarcar/cancelar **não apagam** a coluna J |
 | 29 | Falha real de formato da IA em produção | Cliente recebe o aviso de que a equipe vai responder e a notificação do Error Workflow chega no WhatsApp do responsável com telefone + mensagem do cliente |
+| 32 | **Envio real do Lembrete com telefone numérico** (como a planilha devolve). No Grupo A os nodes de WhatsApp ficam fixados e a expressão do destinatário nunca roda, então este bug passa despercebido. Rode o 13 com a linha fixada com `telefone` **numérico** (um número de teste seu) e **sem** fixar `Enviar Confirmação Final no WhatsApp`. Fixe `Registrar Espera de Lembrete` para não criar espera real | O node devolve `messages[0].id` (wamid) e a mensagem chega; nunca `{"error": "phoneNumber.replace is not a function"}`. Todo `recipientPhoneNumber` do Lembrete usa `String(...)`/`.toString()` |
 
 ---
 
 ## Registro de execuções
+
+### 2026-09-28 (tarde, 4) — telefone numérico quebrava os envios do Lembrete (execução 1203)
+
+No lembrete de produção das 8h (execução 1203), o cliente respondeu "confirmar" duas vezes e a
+IA classificou certo. Mesmo assim, `Enviar Confirmação Final no WhatsApp` devolveu
+`{"error": "phoneNumber.replace is not a function"}` e a mensagem não foi enviada. A execução
+terminou `success` porque o node usa `continueRegularOutput`.
+
+- **Causa:** a planilha devolve `telefone` como número. Só `Enviar Lembrete` convertia para
+  texto; os outros 10 nodes de envio passavam o número cru.
+- **Correção:** `String(...)` no `recipientPhoneNumber` dos 10 nodes.
+- **Divergência encontrada ao comparar o workflow ao vivo com o repo:** `atualizado_em` ainda
+  usava `toISO({ suppressMilliseconds: true })` em 3 nodes de planilha, embora o repo já tivesse
+  `toFormat` (e08c1ba). Foi alinhado no mesmo rascunho.
+
+Versão testada: Lembrete `931e0839` (testada como rascunho; publicada em 28/09 depois desta rodada, substituindo `5e9c05e8`). Na mesma publicação: Agendamento `8f682cee` (exemplos do prompt com "Cliente" no lugar de "José"; smoke test 1288).
+
+| # | Resultado | Evidência (execução) |
+|---|---|---|
+| 32 | ✅ Linha com `telefone: 5511975049937` (número), resposta "Confirmo, estarei lá" → `confirmar` → `Enviar Confirmação Final no WhatsApp` rodou de verdade e devolveu wamid `HBgNNTUx…`; mensagem "Show, José! Te espero às 17h pro seu Corte 3D." entregue | 1290 |
 
 ### 2026-09-28 (tarde, 3) — múltiplos agendamentos simultâneos + guard-rail sistêmico
 

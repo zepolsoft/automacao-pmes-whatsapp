@@ -35,7 +35,9 @@ abaixo.
 | Checar Mensagem Duplicada / Mensagem Já Processada? / Registrar Mensagem Processada | Deduplicação por `message_id` (ver "Regras de negócio" abaixo) |
 | Checar Lock do Telefone / Telefone Ocupado? / Registrar Lock do Telefone | Lock de 10s por telefone, evita execuções paralelas do mesmo cliente |
 | Buscar Serviços e Preços / Formatar Lista de Serviços | Lê a planilha de serviços e monta o texto injetado no prompt da IA |
-| Interpretar Intenção do Cliente | AI Agent (Claude) — classifica intenção, extrai serviço/data/hora e escreve `confirmacao_texto` |
+| Buscar Eventos dos Próximos Dias / Calcular Horários Livres | Lê os eventos do Calendar dos próximos 14 dias e monta as janelas livres injetadas no prompt — é daí que a IA tira as sugestões quando o cliente pede "me sugere uma data" (ver "Sugestão de horários livres") |
+| Interpretar Intenção do Cliente | AI Agent (Claude) — classifica intenção, extrai serviço/data/hora e escreve `confirmacao_texto`. Retry 1x e saída de erro se a resposta não bater com o schema |
+| Avisar Cliente Sobre Falha da IA / Escalar Falha da IA para a Equipe | Saída de erro da IA: avisa o cliente que alguém da equipe vai responder e dispara o Error Workflow (ver "Falha de formato da IA") |
 | Corrigir Falsa Confirmação em Dúvida | Rede de segurança: impede a IA de "confirmar" algo sem checar disponibilidade de verdade |
 | Qual a Intenção do Cliente? | Switch que roteia para agendar / remarcar / cancelar / consultar / dúvida |
 | Tem Dados Completos Para Agendar? / Tem Novo Horário Para Remarcar? | Gates determinísticos: nada é criado/atualizado em Calendar/Sheets até ter serviço + data + horário completos |
@@ -87,6 +89,10 @@ na seção "Colunas de status e preço na planilha" mais abaixo.
 - **Consulta de agendamento com dados reais** (2026-09-24) — quando o cliente pergunta sobre um
   agendamento que já tem, a resposta vem de uma leitura real da planilha (ver "Saída
   'consultar'" no Fluxo abaixo), nunca de um palpite da IA.
+- **Sugestão de horários livres** (2026-09-28) — quando o cliente pede pra IA sugerir um dia, ela
+  oferece 2-3 opções tiradas da agenda real, em vez de insistir que ele escolha — ver seção
+  dedicada abaixo.
+- **Falha de formato da IA não derruba a conversa** (2026-09-28) — ver seção dedicada abaixo.
 
 ## Sincronização de tom com o workflow de lembrete
 
@@ -947,6 +953,62 @@ workflow **[Notificação de Erros](../notificacao-erros/README.md)**: qualquer 
 esteja coberto por `onError: continueRegularOutput` num node (ver seção acima sobre a rede de
 segurança de `onError`) interrompe a execução normalmente, mas também dispara aquele workflow,
 que avisa no WhatsApp com o nome do workflow, o node que falhou e o resumo do erro.
+
+## Sugestão de horários livres (2026-09-28)
+
+**Bug de produção (execução 1177):** quando o cliente pedia "me sugere uma data livre", a IA não
+tinha como saber o que estava livre — só validava uma data que o cliente já tivesse escolhido.
+Ela entrava em loop pedindo "uma data certinha", e numa das respostas chegou a inventar que
+"qualquer dia de segunda a sábado costuma ter horários".
+
+**Como funciona agora:** antes da IA, **Buscar Eventos dos Próximos Dias** lê os eventos do
+Calendar (hoje + 14 dias) e **Calcular Horários Livres** (Code) monta uma linha por dia com as
+janelas livres, já descontando:
+
+- eventos ocupados, com o mesmo critério do free/busy usado em "Verificar Disponibilidade"
+  (ignora cancelados e eventos marcados como "livre"; evento de dia inteiro bloqueia o dia);
+- expediente (seg-sáb, 9h-18h) e domingos;
+- antecedência mínima de 1h a partir de agora, arredondada pra cima em múltiplos de 30 min;
+- janelas menores que o serviço mais curto da planilha.
+
+A lista entra no system message na seção "HORÁRIOS LIVRES NA AGENDA", e a regra "CLIENTE PEDE
+SUGESTÃO DE DIA/HORÁRIO" manda a IA oferecer 2-3 opções concretas, só dessa lista, com início +
+duração do serviço cabendo na janela (60 min se o serviço ainda não foi dito). Quando o cliente
+escolhe uma das opções que foram oferecidas ("a segunda", "quarta às 9h") e o serviço já é
+conhecido, `confirmado = true`: o fluxo normal de agendar ainda roda "Validar Horário de
+Funcionamento" e "Verificar Disponibilidade" antes de "Criar Evento", então uma sugestão errada da
+IA nunca vira evento sem a checagem de sempre.
+
+Se a leitura do Calendar falhar (`onError: continueRegularOutput`), a lista vira
+"INDISPONÍVEL" e a IA pede o dia e o horário de preferência do cliente em vez de inventar
+disponibilidade.
+
+Limites: só enxerga 14 dias à frente (pra "tem algo em novembro?" a IA pede uma data específica)
+e a lista não inclui a pausa de almoço — o expediente é o mesmo 9h-18h de "Validar Horário de
+Funcionamento".
+
+## Falha de formato da IA (2026-09-28)
+
+**Bug de produção (execução 1177):** o "Parser Estruturado de Agendamento" rejeitou a resposta com
+`Model output doesn't fit required format` e a execução inteira morreu sem responder o cliente. O
+conteúdo da resposta estava correto; o problema foi o formato — o modelo devolveu o campo `output`
+como uma **string** contendo o JSON (`{"output":"{\"intencao\":...}"}`) em vez de um objeto.
+
+Três camadas de proteção agora:
+
+1. **Prompt** — regra explícita em REGRAS GERAIS: `output` é um objeto, nunca uma string com JSON.
+2. **Retry** — "Interpretar Intenção do Cliente" tem `retryOnFail` (2 tentativas, 1s entre elas).
+   Como o agente não salva nada na memória quando falha, a segunda tentativa começa limpa. O
+   indicador de "digitando..." continua ativo, então o cliente não percebe a nova tentativa.
+3. **Saída de erro** — se as 2 tentativas falharem (`onError: continueErrorOutput`), o item sai
+   pela segunda saída do agente com `{ error }`: **Avisar Cliente Sobre Falha da IA** manda uma
+   mensagem dizendo que alguém da equipe vai responder, e **Escalar Falha da IA para a Equipe**
+   (Stop and Error) encerra a execução com erro. Isso dispara o Error Workflow, que avisa o
+   responsável no WhatsApp com o nome do cliente, o telefone, a mensagem original e o motivo.
+
+`retryOnFail` e `continueErrorOutput` funcionam juntos no AI Agent v3: foi testado num workflow
+isolado com um schema impossível de satisfazer. Com retry, o parser rodou 2 vezes; sem retry,
+rodou 1 vez; nos dois casos o item saiu pela saída de erro com status `success`.
 
 ## Credenciais (placeholder)
 

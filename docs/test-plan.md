@@ -76,6 +76,12 @@ Até esse ambiente existir, o Grupo B fica **não executado** — não marcar co
 | 19 | Lembrete: cliente não responde (timeout) | `Reverificar Agendamento` → `Avisar Timeout`; execução termina com sucesso |
 | 24 | Situações esperadas (ocupado, fora do expediente) não disparam erro | Execução termina com `status: success` (o Error Workflow só dispara em falha) |
 | 25a | Fuso horário perto da virada do dia (lógica) | Validação usa o dia/hora de São Paulo mesmo com servidor em UTC |
+| 27 | **Cliente pede pra IA sugerir uma data livre** ("me sugere uma data livre", "qual dia você tem vago?") — fixe `Buscar Eventos dos Próximos Dias` com alguns horários ocupados | Oferece 2-3 opções concretas (dia + hora, por extenso), **todas** dentro das janelas de `Calcular Horários Livres.horarios_livres`, nenhuma em horário ocupado/domingo/passado; pergunta o serviço se faltar; nunca "não consigo escolher por você" nem pede só "uma data certinha"; `Responder Dúvida`, nada criado |
+| 27b | Sugestão com preferência ("de tarde", "essa semana", serviço já informado) | Opções respeitam a preferência e cabem inteiras na janela (início + duração do serviço) |
+| 27c | Cliente escolhe uma das opções sugeridas ("quarta às 9h, corte 3D") — mesmo telefone do 27, execução seguinte | `confirmado = true`, início = opção escolhida, fim = início + duração da planilha → `Verificar Disponibilidade` → `Criar Evento` |
+| 27d | Data inválida seguida de pedido de sugestão ("quero dia 30/02/2027" → "veja uma data anterior a esse dia") — a conversa da execução 1177 | Na 2ª mensagem oferece opções da lista em vez de insistir numa data específica |
+| 27e | Calendar fora do ar ao sugerir (fixe `Buscar Eventos dos Próximos Dias` com `[{ "error": "..." }]`) | `horarios_livres` = "INDISPONÍVEL"; a IA pede dia/horário de preferência e **não** inventa disponibilidade |
+| 28 | Resposta da IA fora do schema (`Model output doesn't fit required format`) — não dá pra forçar no workflow real; testar num workflow isolado com o mesmo agente + um schema impossível | Parser roda 2x (retry); na 2ª falha: `Avisar Cliente Sobre Falha da IA` → `Escalar Falha da IA para a Equipe` com nome, telefone, mensagem e motivo na mensagem de erro; nada fica sem resposta pro cliente |
 
 ## Grupo B — Integração real
 
@@ -89,10 +95,33 @@ Até esse ambiente existir, o Grupo B fica **não executado** — não marcar co
 | 23 | Erro real (ex.: credencial inválida) | Notificação de erro chega no WhatsApp |
 | 25b | Mensagem enviada entre 23h e 1h ("amanhã às 10h") | IA resolve "amanhã" pelo relógio real de São Paulo |
 | 26 | Webhook do WhatsApp reenviando a mesma mensagem | Dedup por `message_id`; nenhum agendamento duplicado |
+| 29 | Falha real de formato da IA em produção | Cliente recebe o aviso de que a equipe vai responder e a notificação do Error Workflow chega no WhatsApp do responsável com telefone + mensagem do cliente |
 
 ---
 
 ## Registro de execuções
+
+### 2026-09-28 — sugestão de horários livres + fallback de formato da IA (execução 1177)
+
+Versão testada: Agendamento `41ab8bb8` (testada como rascunho; publicada em 28/09 depois desta
+rodada, substituindo `64c85662`). Agenda fixada: hoje (seg 28/09) 09:30–12:00 ocupado, ter 29/09 dia inteiro ocupado,
+qua 30/09 14:00–18:00 ocupado. Execuções rodadas às ~08h05 de São Paulo.
+
+| # | Resultado | Evidência (execução) |
+|---|---|---|
+| 27 | ✅ "Me sugere uma data livre" → hoje às 12h, qua 30/09 às 9h, qui 01/10 às 14h; pediu o serviço. Nenhuma opção nos horários ocupados | 1212 |
+| 27b | ✅ "corte baixo na máquina, qual dia você tem vago de tarde?" → hoje 14h, qua 13h (termina 13h25, antes do bloqueio das 14h), qui 15h | 1214 |
+| 27c | ✅ "Quarta às 9h, corte 3D" → 30/09 09:00–09:40, `confirmado: true`, `Criar Evento` + `Confirmar Agendamento` | 1213 |
+| 27d | ✅ "Quero dia 30/02/2027" → avisou que a data não existe; "Veja para min uma data anterior a esse dia" → ofereceu 3 opções da lista | 1217, 1218 |
+| 27e | ✅ Calendar com erro → "não estou conseguindo consultar a agenda… me diz qual dia e horário você prefere"; nada inventado | 1215 |
+| 28 | ✅ Workflow isolado `[TESTE] Saída de erro do parser da IA` (arquivado): parser 2x, saída de erro, `Stop and Error` com "A IA não conseguiu interpretar a mensagem de Cliente Teste (5511900000135)… Motivo: Model output doesn't fit required format" | 1200–1202, 1219 |
+| 1 (regressão) | ✅ "Corte 3D quinta às 15h" → 01/10 15:00–15:40, `Propor Horário` (fluxo de data específica inalterado) | 1216 |
+
+`Calcular Horários Livres` também foi testado localmente com Luxon e servidor em UTC: eventos
+sobrepostos, evento passando das 18h, dia inteiro, cancelado, marcado como "livre", antecedência
+de 1h (14:10 → primeira janela 15:30), fim do expediente e item vazio do `alwaysOutputData`.
+
+Não coberto nesta rodada: 29 (depende de uma falha real em produção) e o Grupo B.
 
 ### 2026-09-26 — após correções de duração e da resposta de lembrete
 

@@ -662,6 +662,33 @@ Limitação conhecida (já existia): depois de "Pedir Esclarecimento", o loop se
 resposta. O que o cliente responder chega no workflow de Agendamento, que trata cancelar/remarcar
 com a mesma regra de "não adivinhar qual agendamento".
 
+## Escopo da conversa na resposta ao lembrete (2026-09-28)
+
+Mesmas três categorias do Agendamento (ver "Escopo da conversa" no README dele), agora como
+decisões do "Classificar Resposta do Lembrete":
+
+- **`encaminhar`**: pergunta legítima sobre a barbearia que a IA não sabe responder. O fluxo é o
+  mesmo do Agendamento, com os mesmos nomes de node: "Checar Encaminhamento Recente" → "Já
+  Encaminhou Nos Últimos 30 Min?" → "Avisar Dúvida Já Encaminhada no WhatsApp", ou "Registrar
+  Encaminhamento de Dúvida" → "Encaminhar Dúvida ao Responsável no WhatsApp" → "Avisar Cliente
+  Sobre Dúvida Encaminhada no WhatsApp" → volta para o loop.
+  - O aviso ao responsável tem uma linha a mais: "Contexto: resposta ao lembrete do X de hoje às
+    HH:mm (o agendamento continua marcado)".
+- **`fora_do_escopo`**: assunto sem relação com a barbearia, ou tentativa de manipulação (inclusive
+  junto com "confirmo"). "Recusar Assunto Fora do Escopo no WhatsApp" → loop; o agendamento não é
+  alterado.
+- **Textos idênticos aos do Agendamento**, fixos no `textBody` dos nodes (conferidos byte a byte na
+  implantação). Se mudar um texto, mude nos dois workflows.
+- **Trava de 30 min compartilhada**: usa a **mesma** Data Table `encaminhamentos_duvida`
+  (`LIsp5qJ88DxWRnOY`), com o telefone gravado como texto (`String(...)`), igual ao Agendamento.
+  Um encaminhamento feito por qualquer um dos dois workflows bloqueia o outro pelo mesmo telefone.
+- **Decisão mais pergunta** ("Confirmo! aceitam pix?"): a decisão é aplicada e a pergunta **não** é
+  encaminhada. A IA não promete retorno; pede para o cliente mandar a dúvida numa mensagem
+  separada, que cai no Agendamento.
+- Todos os nodes novos têm `onError: continueRegularOutput`, para uma falha não parar o loop dos
+  outros lembretes. O fallback "Não Entendi" (Pedir Esclarecimento) passou do índice 3 para o 5
+  no Switch.
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

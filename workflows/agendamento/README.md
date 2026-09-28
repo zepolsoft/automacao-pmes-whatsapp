@@ -1042,6 +1042,12 @@ Limit existia no caminho de remarcar.
 4. **Confirmar Cancelamento no WhatsApp** deixou de usar a frase da IA: monta o texto com o
    serviço, o dia e o horário da linha que foi de fato cancelada.
 
+### Consulta com vários agendamentos (2026-09-28)
+
+"Formatar Resposta da Consulta" passou a listar só os agendamentos **futuros**. Antes, um
+"agendado" de hoje cedo que já tinha passado ainda aparecia como marcado. Cada item também mostra
+"(para X)" quando o agendamento não é do próprio cliente.
+
 ### Beneficiário (2026-09-28)
 
 Coluna `beneficiario` (J) na planilha "Clientes - Automação PMEs": para quem é o atendimento.

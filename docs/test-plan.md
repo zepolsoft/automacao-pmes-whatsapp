@@ -95,6 +95,49 @@ Até esse ambiente existir, o Grupo B fica **não executado** — não marcar co
 | 31d | Todas as linhas antigas, sem beneficiário (dados reais de 28/09); "cancela o da minha esposa" | Pergunta qual — não deduz pelo tipo de serviço (ex.: "Corte Feminino") |
 | 31e | Agendar para outra pessoa: "Corte Feminino Com Lavagem pra minha esposa Ana amanhã às 10h" → "Sim" | `beneficiario: "Ana - esposa"` na proposta e no "sim"; proposta menciona a Ana; `Salvar Cliente` grava `beneficiario` (Grupo B: conferir na planilha real) |
 
+## Múltiplos agendamentos ativos simultâneos
+
+Os bugs de 28/09 só apareceram porque o mesmo número tinha 3-4 agendamentos ativos ao mesmo tempo
+(dele, da esposa, do filho, em dias diferentes). O checklist acima testa quase sempre **um**
+agendamento por vez. Esta categoria roda com **2+ ativos para o mesmo telefone**, misturando
+beneficiários ("Eu mesmo", "Esposa", "Filho", e linhas antigas sem beneficiário).
+
+Como rodar:
+- **Agendamento:** fixe a mesma lista de linhas em `Buscar Agendamentos Ativos do Cliente`,
+  `Buscar Agendamento para Cancelar/Remarcar` e `Buscar Agendamentos do Cliente (Consultar)`, com
+  horários no futuro no momento do teste e a coluna `beneficiario` preenchida.
+- **Lembrete** (trigger `Disparar Lembrete Diário às 8h`): fixe `Buscar Agendamentos de Hoje
+  (Planilha)` com 2 linhas de **hoje** para o mesmo telefone, e fixe os dois Wait (`Aguardar
+  Resposta do Cliente` e `Aguardar Confirmação da Remarcação`) com o payload da resposta
+  (`{ "body": { "messages": [{ "type": "text", "text": { "body": "..." } }] } }`). Também fixe os
+  dois `Registrar Espera de Lembrete`, que escrevem na Data Table real. O Wait fixado devolve a
+  **mesma** resposta para os dois lembretes do loop, e é isso que o teste precisa: a mesma frase
+  tem que ter efeitos diferentes em cada agendamento.
+
+| # | Cenário | Esperado |
+|---|---|---|
+| M1 | Cancelar/remarcar com referência ambígua ("o corte de hoje para minha esposa", "o mais cedo") e linhas **sem** beneficiário | Pergunta qual, listando só os que se encaixam; nada alterado (ver 30–30d) |
+| M2 | Referência que o `beneficiario` resolve sozinho ("o da minha esposa", só um "Esposa") | Age direto no agendamento certo, sem perguntar (ver 31a) |
+| M3 | Ambiguidade real mesmo com o campo (dois "Filho"; "o do meu filho") | Pergunta listando só os dois do filho; nada alterado (ver 31b) |
+| M4 | **Lembrete**, 2 agendamentos hoje (15h "Eu mesmo", 17h "Esposa"); resposta "Cancela o da minha esposa" | Lembrete das 15h → `indefinido` → `Pedir Esclarecimento` (citando "Corte X de hoje às 15h"), **não** cancela; lembrete das 17h → `Cancelar Evento` com o `event_id` da esposa |
+| M5 | Lembrete, mesmos 2 agendamentos; resposta "Confirmo" | Os dois confirmados, cada `confirmacao_texto` citando o próprio agendamento |
+| M6 | Lembrete; resposta "Cancela o das 17h" | 15h → `indefinido`; 17h → cancelado |
+| M7 | Lembrete; resposta "Pode remarcar pra 16h" | Os dois → `remarcar` (novo horário não é "referência a outro agendamento"); texto nunca inventa nome ("sua esposa", não "Ana") |
+| M8 | "Quais são os meus agendamentos?" com 4 ativos futuros + 1 "agendado" de hoje que já passou + 1 concluído | Lista só os 4 futuros, em ordem, com "(para X)" quando não é o próprio cliente |
+
+## Guard-rail de formato da IA (todos os nodes com saída estruturada)
+
+Não dá pra fazer o modelo errar o formato de propósito. Para testar, troque **temporariamente**,
+no rascunho, o parser do node por um schema impossível (`schemaType: manual`, com uma propriedade
+obrigatória `{"not": {}}`), rode e **restaure o parser original** — conferir depois que o
+parâmetro voltou idêntico.
+
+| # | Node | Esperado |
+|---|---|---|
+| G1 | `Interpretar Intenção do Cliente` (Agendamento) | Parser roda 2x; `Avisar Cliente Sobre Falha da IA` → `Escalar Falha da IA para a Equipe` (execução termina em erro de propósito → Error Workflow notifica) |
+| G2 | `Classificar Resposta do Lembrete` (Lembrete) | Parser 2x por lembrete; `Preparar Aviso de Falha da IA` (etapa "resposta ao lembrete") → cliente avisado de que o horário continua marcado → equipe notificada → **loop segue** para o próximo agendamento; nada confirmado/cancelado |
+| G3 | `Classificar Confirmação da Remarcação` (Lembrete) | Mesmo fallback (etapa "confirmação da remarcação"); `Atualizar Evento` **não** executa; loop segue |
+
 ## Grupo B — Integração real
 
 | # | Cenário | Esperado |
@@ -113,6 +156,36 @@ Até esse ambiente existir, o Grupo B fica **não executado** — não marcar co
 ---
 
 ## Registro de execuções
+
+### 2026-09-28 (tarde, 3) — múltiplos agendamentos simultâneos + guard-rail sistêmico
+
+Versões testadas como rascunho e publicadas em 28/09 depois desta rodada: Agendamento `0c939860`
+(substituindo `cce566bd`), Lembrete `5e9c05e8` (substituindo `bb271a04`). Execuções entre 12h30 e 12h45 de São
+Paulo.
+
+**12 de 12 aprovados na versão final.** Durante a rodada apareceram 2 problemas, corrigidos e
+re-testados:
+- No lembrete, "Pode remarcar pra 16h" virou `indefinido` no 2º agendamento, porque a regra nova
+  tratou o novo horário como referência a outro agendamento. A regra foi esclarecida (1277 → 1279).
+- No texto de uma remarcação, a IA chamou o cliente de "Ana", um nome inexistente nos dados. Foi
+  adicionada uma regra para nunca inventar nomes (1279 → 1281).
+
+| # | Resultado | Evidência (execução) |
+|---|---|---|
+| M1 | ✅ Incidente de 09:02 com linhas sem beneficiário → "Encontrei dois agendamentos pra hoje: … Qual dos dois é o da sua esposa…?"; nada cancelado | 1284 |
+| M2 | ✅ "Cancela o corte da minha esposa" (só um "Esposa") → cancelou direto `evtFemininoHoje` | 1285 |
+| M3 | ✅ "Cancela o do meu filho" (dois "Filho") → perguntou listando só os dois | 1286 |
+| M4 | ✅ Lembrete 15h → `indefinido` + esclarecimento; lembrete 17h → cancelado `evtLembreteEsposa` | 1275 |
+| M5 | ✅ "Confirmo" → os dois confirmados ("seu corte às 15h", "o corte feminino com lavagem da sua esposa às 17h") | 1276 |
+| M6 | ✅ "Cancela o das 17h" → 15h `indefinido`, 17h cancelado | 1280 |
+| M7 | ✅ "Pode remarcar pra 16h" → os dois `remarcar`, 16:00–16:25 e 16:00–17:00 (duração da planilha); texto "da sua esposa", sem nome inventado | 1281 (1277/1279 antes das correções) |
+| M8 | ✅ "Quais são os meus agendamentos?" → 4 futuros, com "(para Filho)" / "(para Ana - esposa)"; o de hoje às 10h (já passou) e o concluído ficaram de fora | 1282 |
+| 27 (regressão) | ✅ "Me sugere uma data livre" → 3 opções só em dias livres | 1283 |
+| G1 | ✅ Parser do Agendamento forçado a falhar → "A IA não conseguiu interpretar a mensagem de Cliente Teste… depois de 2 tentativas" (erro de propósito) | 1287 |
+| G2 | ✅ Parser da classificação do lembrete forçado → 2 tentativas × 2 lembretes, cliente e equipe avisados com o agendamento certo de cada um, loop concluído | 1278 |
+| G3 | ✅ Parser da confirmação da remarcação forçado → fallback, `Atualizar Evento` não executou, loop seguiu | 1277 |
+
+Os parsers foram restaurados depois de G1–G3 e conferidos contra o original.
 
 ### 2026-09-28 (tarde, 2) — coluna `beneficiario` como critério de desambiguação
 

@@ -61,7 +61,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $json.telefone.toString() }}",
-        "textBody": "={{ (() => { const nome = $json.nome || ''; const horario = $json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($json.data).setZone('America/Sao_Paulo')) : ''; const opcoes = [ `Oi ${nome}! Passando para lembrar do seu horário de ${$json.servico} hoje às ${horario}. Você confirma, quer cancelar ou prefere remarcar?`, `Oi ${nome}, tudo bem? Só passando pra confirmar seu horário de ${$json.servico} hoje às ${horario}. Fica confirmado, ou prefere cancelar/remarcar?`, `${nome}, lembrando do seu ${$json.servico} hoje às ${horario}! Confirma pra gente, ou precisa cancelar/remarcar?` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
+        "textBody": "={{ (() => { const nome = $json.nome || ''; const horario = $json.data ? (dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($json.data).setZone('America/Sao_Paulo')) : ''; const b = String($json.beneficiario ?? '').trim(); const para = b && b.toLowerCase() !== 'eu mesmo' ? ` (para ${b})` : ''; const opcoes = [ `Oi ${nome}! Passando para lembrar do seu horário de ${$json.servico}${para} hoje às ${horario}. Você confirma, quer cancelar ou prefere remarcar?`, `Oi ${nome}, tudo bem? Só passando pra confirmar seu horário de ${$json.servico}${para} hoje às ${horario}. Fica confirmado, ou prefere cancelar/remarcar?`, `${nome}, lembrando do seu ${$json.servico}${para} hoje às ${horario}! Confirma pra gente, ou precisa cancelar/remarcar?` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
     },
@@ -214,13 +214,16 @@
       "position": [1872, 80],
       "parameters": {
         "promptType": "define",
-        "text": "=Nome do cliente: {{ $('Processar Cada Agendamento').item.json.nome }}\nServiço agendado: {{ $('Processar Cada Agendamento').item.json.servico }}\nData e hora atuais: {{ $now.toISO() }}\nData e hora do agendamento atual: {{ $('Processar Cada Agendamento').item.json.data }}\nResposta do cliente ao lembrete: {{ $('Normalizar Resposta do Lembrete').item.json.resposta_cliente }}",
+        "text": "=Nome do cliente: {{ $('Processar Cada Agendamento').item.json.nome }}\nServiço agendado: {{ $('Processar Cada Agendamento').item.json.servico }}\nPara quem é este agendamento: {{ String($('Processar Cada Agendamento').item.json.beneficiario ?? '').trim() || 'não informado' }}\nData e hora atuais: {{ $now.toISO() }}\nData e hora do agendamento atual: {{ $('Processar Cada Agendamento').item.json.data }}\nOutros agendamentos deste cliente hoje (NÃO são o deste lembrete): {{ (() => { const atual = $('Processar Cada Agendamento').item.json; const outros = $('Filtrar Data de Hoje').all().map(i => i.json).filter(r => String(r.telefone) === String(atual.telefone) && r.event_id !== atual.event_id); return outros.length ? outros.map(r => `${r.servico} às ${DateTime.fromISO(r.data).setZone('America/Sao_Paulo').toFormat('HH:mm')} (para: ${String(r.beneficiario ?? '').trim() || 'não informado'})`).join('; ') : 'nenhum'; })() }}\nResposta do cliente ao lembrete: {{ $('Normalizar Resposta do Lembrete').item.json.resposta_cliente }}",
         "hasOutputParser": true,
         "options": {
-          "systemMessage": "Você é o Zap, assistente virtual de agendamento de uma barbearia. Nesta etapa, você classifica a resposta de um cliente a um lembrete de agendamento em uma de quatro categorias:\n- \"confirmar\" — o cliente confirmou o horário\n- \"cancelar\" — o cliente não vai mais\n- \"remarcar\" — o cliente quer outro dia/horário\n- \"indefinido\" — resposta realmente ambígua ou que não indica nenhuma das anteriores\n\nREGRAS DE CLASSIFICAÇÃO (não mude esta lógica, só a redação da resposta ao cliente):\n- Se a resposta do cliente for apenas um emoji (ou combinação de emojis) sem texto, ou uma expressão curta de agradecimento/confirmação (ex: \"ok\", \"blz\", \"obrigado\", \"👍\", \"🙏\") — normalmente o cliente só está reconhecendo a mensagem, sem pedir cancelamento ou remarcação — trate como confirmação implícita do agendamento: decisao = \"confirmar\".\n- decisao = \"indefinido\" fica reservada só para respostas realmente ambíguas ou que não indicam confirmar/cancelar/remarcar de forma alguma — nunca para reações curtas como essas.\n- Se o cliente quiser remarcar e sugerir um novo dia/horário, converta para data e hora absolutas em ISO 8601 (novo_horario_inicio/novo_horario_fim), usando a data e hora atuais informadas como referência, assumindo 1 hora de duração.\n\nCONFIRMACAO_TEXTO — mensagem curta, natural e cordial em português para enviar ao cliente, como se um atendente de verdade estivesse digitando no WhatsApp. Escreva como uma frase corrida e espontânea, nunca como um formulário preenchido ou template com lacunas.\n\nVARIEDADE E TOM (vale para toda confirmacao_texto, em qualquer decisao):\n- Nunca repita a mesma estrutura de frase, a mesma palavra de abertura (\"Perfeito\", \"Combinado\", \"Prontinho\", \"Tudo bem\") ou a mesma ordem de informações em mensagens seguidas — varie a forma de começar e de organizar a frase a cada resposta, como uma pessoa de verdade escreveria. Os exemplos abaixo mostram só o formato esperado — nunca copie o texto deles literalmente.\n- Use o nome do cliente de forma natural, mas não é obrigatório em toda mensagem — um atendente de verdade não repete o nome do outro em cada frase. Priorize usar o nome ao confirmar algo importante ou ao acolher o cliente numa remarcação de última hora.\n- Seja especialmente acolhedor quando o cliente pede para remarcar em cima da hora (pouco tempo antes do horário já agendado) — reconheça a situação com empatia antes de confirmar, em vez de responder de forma seca.\n\nRegras por decisao:\n- decisao = \"confirmar\": confirme de forma calorosa e breve que o horário está garantido. Exemplos (varie entre estilos assim): \"Perfeito, te espero por aqui!\" / \"Combinado, {{ nome }}! Até já.\" / \"Show, contando com você!\" — inclusive quando a confirmação veio de um emoji ou \"ok\" (ex: \"Por nada, até lá! 😊\", \"Fico à disposição!\").\n- decisao = \"cancelar\": confirme o cancelamento de forma gentil, sem soar burocrático, e deixe claro que o cliente pode remarcar quando quiser. Exemplos: \"Tudo bem, cancelei aqui pra você. Quando quiser remarcar é só chamar!\" / \"Combinado, seu horário foi cancelado sem problema. Te espero quando quiser voltar.\"\n- decisao = \"remarcar\" e um novo horário foi identificado: escreva uma frase curta e natural PERGUNTANDO se pode confirmar a mudança para o novo dia/horário, por extenso em português (ex: \"quinta-feira, dia 19 de setembro, às 10h\"), incorporado numa frase fluida — NUNCA diga que já foi remarcado, você está só propondo, ainda falta o cliente confirmar numa mensagem separada. Se o pedido for de última hora, reconheça isso com empatia antes de perguntar (ex.: \"Sem problema, dá tempo sim! Ficaria pra quinta às 10h — posso confirmar?\" em vez de só cravar a nova data/hora seca). Este texto só é enviado se o novo horário realmente estiver disponível; a remarcação de fato só acontece depois que o cliente responder confirmando essa pergunta.\n- decisao = \"indefinido\": não gere confirmacao_texto de confirmação — este caso não usa o campo (a pergunta de esclarecimento ao cliente já é tratada por outro node do fluxo).\n\nSe não for possível classificar com clareza, responda decisao como \"indefinido\"."
+          "systemMessage": "Você é o Zap, assistente virtual de agendamento de uma barbearia. Nesta etapa, você classifica a resposta de um cliente a um lembrete de agendamento em uma de quatro categorias:\n- \"confirmar\" — o cliente confirmou o horário\n- \"cancelar\" — o cliente não vai mais\n- \"remarcar\" — o cliente quer outro dia/horário\n- \"indefinido\" — resposta realmente ambígua ou que não indica nenhuma das anteriores\n\nREGRAS DE CLASSIFICAÇÃO (não mude esta lógica, só a redação da resposta ao cliente):\n- Se a resposta do cliente for apenas um emoji (ou combinação de emojis) sem texto, ou uma expressão curta de agradecimento/confirmação (ex: \"ok\", \"blz\", \"obrigado\", \"👍\", \"🙏\") — normalmente o cliente só está reconhecendo a mensagem, sem pedir cancelamento ou remarcação — trate como confirmação implícita do agendamento: decisao = \"confirmar\".\n- decisao = \"indefinido\" fica reservada só para respostas realmente ambíguas ou que não indicam confirmar/cancelar/remarcar de forma alguma — nunca para reações curtas como essas.\n- Este lembrete é sobre UM agendamento específico (o \"agendamento atual\" informado acima) e a decisão que você der será aplicada SÓ a ele. Respostas diretas, sem referência a outro horário, serviço ou pessoa (\"confirmo\", \"ok\", \"não vou poder ir\", \"cancela\", \"pode remarcar pra 16h\"), valem para o agendamento atual.\n- Se a resposta se referir claramente a OUTRO agendamento — cita outro horário, outro serviço ou outra pessoa que não bate com o agendamento atual (ex.: \"cancela o da minha esposa\" quando o atual é \"Eu mesmo\"; \"cancela o das 17h\" quando o atual é às 15h; \"o de sexta\") — ou se não der para saber se ele está falando do atual ou de outro, use decisao = \"indefinido\". Nunca aplique a decisão ao agendamento atual por suposição: o cliente será perguntado sobre o agendamento atual.\n- Atenção: um NOVO horário pedido para remarcar (\"pode remarcar pra 16h\", \"passa pra amanhã às 10h\") não é referência a outro agendamento — é um pedido de remarcação do agendamento atual (decisao = \"remarcar\"). Só trate um horário como referência a outro agendamento quando ele identificar qual agendamento o cliente quer alterar (\"o das 17h\", \"o de sexta\").\n- Se o cliente quiser remarcar e sugerir um novo dia/horário, converta para data e hora absolutas em ISO 8601 (novo_horario_inicio/novo_horario_fim), usando a data e hora atuais informadas como referência, assumindo 1 hora de duração.\n\nCONFIRMACAO_TEXTO — mensagem curta, natural e cordial em português para enviar ao cliente, como se um atendente de verdade estivesse digitando no WhatsApp. Escreva como uma frase corrida e espontânea, nunca como um formulário preenchido ou template com lacunas.\n\nVARIEDADE E TOM (vale para toda confirmacao_texto, em qualquer decisao):\n- Nunca repita a mesma estrutura de frase, a mesma palavra de abertura (\"Perfeito\", \"Combinado\", \"Prontinho\", \"Tudo bem\") ou a mesma ordem de informações em mensagens seguidas — varie a forma de começar e de organizar a frase a cada resposta, como uma pessoa de verdade escreveria. Os exemplos abaixo mostram só o formato esperado — nunca copie o texto deles literalmente.\n- Nomes: use SOMENTE o nome informado em \"Nome do cliente\" para falar com o cliente, e só cite o nome de outra pessoa se ele aparecer em \"Para quem é este agendamento\" (ex.: \"Ana - esposa\"). Nunca invente nomes — se o agendamento é só \"Esposa\", diga \"sua esposa\".\n- Use o nome do cliente de forma natural, mas não é obrigatório em toda mensagem — um atendente de verdade não repete o nome do outro em cada frase. Priorize usar o nome ao confirmar algo importante ou ao acolher o cliente numa remarcação de última hora.\n- Seja especialmente acolhedor quando o cliente pede para remarcar em cima da hora (pouco tempo antes do horário já agendado) — reconheça a situação com empatia antes de confirmar, em vez de responder de forma seca.\n\nRegras por decisao:\n- decisao = \"confirmar\": confirme de forma calorosa e breve que o horário está garantido. Exemplos (varie entre estilos assim): \"Perfeito, te espero por aqui!\" / \"Combinado, {{ nome }}! Até já.\" / \"Show, contando com você!\" — inclusive quando a confirmação veio de um emoji ou \"ok\" (ex: \"Por nada, até lá! 😊\", \"Fico à disposição!\").\n- decisao = \"cancelar\": confirme o cancelamento de forma gentil, sem soar burocrático, e deixe claro que o cliente pode remarcar quando quiser. Exemplos: \"Tudo bem, cancelei aqui pra você. Quando quiser remarcar é só chamar!\" / \"Combinado, seu horário foi cancelado sem problema. Te espero quando quiser voltar.\"\n- decisao = \"remarcar\" e um novo horário foi identificado: escreva uma frase curta e natural PERGUNTANDO se pode confirmar a mudança para o novo dia/horário, por extenso em português (ex: \"quinta-feira, dia 19 de setembro, às 10h\"), incorporado numa frase fluida — NUNCA diga que já foi remarcado, você está só propondo, ainda falta o cliente confirmar numa mensagem separada. Se o pedido for de última hora, reconheça isso com empatia antes de perguntar (ex.: \"Sem problema, dá tempo sim! Ficaria pra quinta às 10h — posso confirmar?\" em vez de só cravar a nova data/hora seca). Este texto só é enviado se o novo horário realmente estiver disponível; a remarcação de fato só acontece depois que o cliente responder confirmando essa pergunta.\n- decisao = \"indefinido\": não gere confirmacao_texto de confirmação — este caso não usa o campo (a pergunta de esclarecimento ao cliente já é tratada por outro node do fluxo).\n\nSe não for possível classificar com clareza, responda decisao como \"indefinido\"."
         }
       },
-      "onError": "continueRegularOutput"
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
     },
     {
       "id": "61b4b5e6-ea4f-4ef1-8ac6-e89421c0dd5d",
@@ -609,7 +612,10 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [3840, 480],
-      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput",
       "parameters": {
         "promptType": "define",
         "text": "=Nome do cliente: {{ $('Processar Cada Agendamento').item.json.nome }}\nMensagem que você (atendente) acabou de enviar perguntando se pode confirmar a remarcação: {{ $('Classificar Resposta do Lembrete').item.json.output.confirmacao_texto }}\nNovo horário proposto (ISO): {{ $('Classificar Resposta do Lembrete').item.json.output.novo_horario_inicio }}\nResposta do cliente a essa pergunta: {{ $json.resposta_confirmacao }}",
@@ -716,6 +722,57 @@
       }
     },
     {
+      "id": "c80a3d8a-305e-4d50-8a24-57e96c7716fd",
+      "name": "Preparar Aviso de Falha da IA",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [3168, 800],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            { "id": "etapa", "name": "etapa", "type": "string", "value": "={{ $prevNode.name === 'Classificar Confirmação da Remarcação' ? 'confirmação da remarcação' : 'resposta ao lembrete' }}" },
+            { "id": "resposta", "name": "resposta", "type": "string", "value": "={{ $prevNode.name === 'Classificar Confirmação da Remarcação' ? $('Normalizar Confirmação da Remarcação').item.json.resposta_confirmacao : $('Normalizar Resposta do Lembrete').item.json.resposta_cliente }}" },
+            { "id": "mensagem_cliente", "name": "mensagem_cliente", "type": "string", "value": "={{ `Opa, me enrolei aqui pra entender sua resposta 😅 Seu horário de ${$('Processar Cada Agendamento').item.json.servico}${(b => b && b.toLowerCase() !== 'eu mesmo' ? ` (para ${b})` : '')(String($('Processar Cada Agendamento').item.json.beneficiario ?? '').trim())} hoje às ${(dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Processar Cada Agendamento').item.json.data).setZone('America/Sao_Paulo'))} continua marcado como estava — já chamei alguém da equipe pra confirmar isso direitinho com você.` }}" },
+            { "id": "mensagem_equipe", "name": "mensagem_equipe", "type": "string", "value": "={{ `⚠️ Lembrete: a IA não conseguiu interpretar a ${$prevNode.name === 'Classificar Confirmação da Remarcação' ? 'confirmação da remarcação' : 'resposta ao lembrete'} de ${$('Processar Cada Agendamento').item.json.nome} (${$('Processar Cada Agendamento').item.json.telefone}) depois de 2 tentativas: \"${$prevNode.name === 'Classificar Confirmação da Remarcação' ? $('Normalizar Confirmação da Remarcação').item.json.resposta_confirmacao : $('Normalizar Resposta do Lembrete').item.json.resposta_cliente}\". Agendamento: ${$('Processar Cada Agendamento').item.json.servico}${(b => b && b.toLowerCase() !== 'eu mesmo' ? ` (para ${b})` : '')(String($('Processar Cada Agendamento').item.json.beneficiario ?? '').trim())} hoje às ${(dt => dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`)(DateTime.fromISO($('Processar Cada Agendamento').item.json.data).setZone('America/Sao_Paulo'))} (event_id ${$('Processar Cada Agendamento').item.json.event_id}). O cliente foi avisado e o horário foi mantido — responda manualmente. Motivo: ${$json.error}` }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ad03c20c-7466-414b-ae71-1a6154f1f361",
+      "name": "Avisar Cliente Sobre Falha da IA",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [3392, 800],
+      "webhookId": "eb8e929f-9793-4046-92d9-e141ae874af3",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1367004446487242",
+        "recipientPhoneNumber": "={{ String($('Processar Cada Agendamento').item.json.telefone) }}",
+        "textBody": "={{ $('Preparar Aviso de Falha da IA').item.json.mensagem_cliente }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "70eeb27e-47e8-42f5-b4cd-04d5a4b9b787",
+      "name": "Notificar Equipe Sobre Falha da IA",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [3616, 800],
+      "webhookId": "46f5ea55-3279-40f2-8dc7-6858505cf50e",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "1367004446487242",
+        "recipientPhoneNumber": "5511975049937",
+        "textBody": "={{ $('Preparar Aviso de Falha da IA').item.json.mensagem_equipe }}",
+        "additionalFields": {}
+      }
+    },
+    {
       "id": "ec5114cb-c221-4c2e-aa46-4769890232bd",
       "name": "Pedir Esclarecimento no WhatsApp",
       "type": "n8n-nodes-base.whatsApp",
@@ -727,7 +784,7 @@
         "operation": "send",
         "phoneNumberId": "1367004446487242",
         "recipientPhoneNumber": "={{ $('Processar Cada Agendamento').item.json.telefone }}",
-        "textBody": "={{ (() => { const nome = $('Processar Cada Agendamento').item.json.nome || ''; const opcoes = [ `Desculpa` + (nome ? `, ${nome}` : '') + `, não entendi bem. Você quer confirmar, cancelar ou remarcar o horário?`, `Não peguei direito` + (nome ? `, ${nome}` : '') + `! Confirma, cancela ou prefere remarcar?`, `Só pra eu confirmar` + (nome ? `, ${nome}` : '') + `: você quer manter o horário, cancelar ou remarcar?` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
+        "textBody": "={{ (() => { const a = $('Processar Cada Agendamento').item.json; const nome = a.nome || ''; const dt = DateTime.fromISO(a.data).setZone('America/Sao_Paulo'); const hora = dt.minute === 0 ? `${dt.toFormat('H')}h` : `${dt.toFormat('H')}h${dt.toFormat('mm')}`; const b = String(a.beneficiario ?? '').trim(); const para = b && b.toLowerCase() !== 'eu mesmo' ? ` (para ${b})` : ''; const qual = `${a.servico}${para} de hoje às ${hora}`; const opcoes = [ `Desculpa` + (nome ? `, ${nome}` : '') + `, não entendi bem. Sobre o ${qual}: você quer confirmar, cancelar ou remarcar?`, `Não peguei direito` + (nome ? `, ${nome}` : '') + `! Esse lembrete é do ${qual} — confirma, cancela ou prefere remarcar?`, `Só pra eu confirmar` + (nome ? `, ${nome}` : '') + `: sobre o ${qual}, você quer manter, cancelar ou remarcar?` ]; return opcoes[Math.floor(Math.random() * opcoes.length)]; })() }}",
         "additionalFields": {}
       }
     },
@@ -899,7 +956,10 @@
     "Avisar Timeout do Lembrete no WhatsApp": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Normalizar Resposta do Lembrete": { "main": [[{ "node": "Ativar Indicador de Digitação", "type": "main", "index": 0 }]] },
     "Ativar Indicador de Digitação": { "main": [[{ "node": "Classificar Resposta do Lembrete", "type": "main", "index": 0 }]] },
-    "Classificar Resposta do Lembrete": { "main": [[{ "node": "Confirmar, Cancelar ou Remarcar?", "type": "main", "index": 0 }]] },
+    "Classificar Resposta do Lembrete": { "main": [[{ "node": "Confirmar, Cancelar ou Remarcar?", "type": "main", "index": 0 }], [{ "node": "Preparar Aviso de Falha da IA", "type": "main", "index": 0 }]] },
+    "Preparar Aviso de Falha da IA": { "main": [[{ "node": "Avisar Cliente Sobre Falha da IA", "type": "main", "index": 0 }]] },
+    "Avisar Cliente Sobre Falha da IA": { "main": [[{ "node": "Notificar Equipe Sobre Falha da IA", "type": "main", "index": 0 }]] },
+    "Notificar Equipe Sobre Falha da IA": { "main": [[{ "node": "Processar Cada Agendamento", "type": "main", "index": 0 }]] },
     "Modelo Claude para Classificação": { "ai_languageModel": [[{ "node": "Classificar Resposta do Lembrete", "type": "ai_languageModel", "index": 0 }]] },
     "Simple Memory": { "ai_memory": [[{ "node": "Classificar Resposta do Lembrete", "type": "ai_memory", "index": 0 }]] },
     "Parser Estruturado de Classificação": { "ai_outputParser": [[{ "node": "Classificar Resposta do Lembrete", "type": "ai_outputParser", "index": 0 }]] },
@@ -945,7 +1005,7 @@
     "Normalizar Confirmação da Remarcação": { "main": [[{ "node": "Classificar Confirmação da Remarcação", "type": "main", "index": 0 }]] },
     "Modelo Claude para Confirmação da Remarcação": { "ai_languageModel": [[{ "node": "Classificar Confirmação da Remarcação", "type": "ai_languageModel", "index": 0 }]] },
     "Parser Estruturado de Confirmação da Remarcação": { "ai_outputParser": [[{ "node": "Classificar Confirmação da Remarcação", "type": "ai_outputParser", "index": 0 }]] },
-    "Classificar Confirmação da Remarcação": { "main": [[{ "node": "Cliente Confirmou a Remarcação?", "type": "main", "index": 0 }]] },
+    "Classificar Confirmação da Remarcação": { "main": [[{ "node": "Cliente Confirmou a Remarcação?", "type": "main", "index": 0 }], [{ "node": "Preparar Aviso de Falha da IA", "type": "main", "index": 0 }]] },
     "Cliente Confirmou a Remarcação?": {
       "main": [
         [{ "node": "Atualizar Evento no Calendar", "type": "main", "index": 0 }],

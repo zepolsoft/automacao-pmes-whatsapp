@@ -621,6 +621,47 @@ cruzada, graças ao `splitInBatches(batchSize:1)` sequencial de **Processar Cada
 real encontrado. Detalhes completos na seção "Auditoria de risco da janela de tempo" do README
 do workflow "Agendamento via WhatsApp".
 
+## Falha de formato da IA não derruba o loop (2026-09-28)
+
+Os dois agentes deste workflow ("Classificar Resposta do Lembrete" e "Classificar Confirmação da
+Remarcação") usam parser estruturado, que pode rejeitar uma resposta fora do schema. Isso já
+aconteceu no Agendamento (execução 1177). Antes da correção:
+- "Classificar Resposta do Lembrete" tinha `continueRegularOutput`. Numa falha, caía calado na
+  pergunta genérica de esclarecimento, sem nova tentativa nem aviso a ninguém.
+- "Classificar Confirmação da Remarcação" **não tinha tratamento**. Uma falha matava a execução
+  diária inteira, e os clientes seguintes do loop ficavam sem lembrete.
+
+Agora os dois têm `retryOnFail` (2 tentativas, 1s) e `onError: continueErrorOutput`. A saída de
+erro vai para **Preparar Aviso de Falha da IA** (Set), que monta as mensagens e identifica a etapa
+por `$prevNode.name`. Depois vêm **Avisar Cliente Sobre Falha da IA** ("seu horário de X hoje às
+Y continua marcado como estava — já chamei alguém da equipe") e **Notificar Equipe Sobre Falha da
+IA**, que manda para o WhatsApp do responsável, o mesmo número do Error Workflow, a resposta
+original, o agendamento, o `event_id` e o motivo. Por fim o fluxo volta para **Processar Cada
+Agendamento**. Aqui **não** se usa Stop and Error (como no Agendamento), porque ele encerraria o
+loop e os outros clientes do dia ficariam sem lembrete.
+
+## Cliente com mais de um agendamento no mesmo dia (2026-09-28)
+
+O loop manda um lembrete por agendamento, em sequência, e cada resposta vai para o agendamento do
+lembrete que está esperando. O problema era o classificador conhecer só esse agendamento: um
+"cancela o da minha esposa" em resposta ao lembrete das 15h (do próprio cliente) cancelava o das
+15h.
+
+- O prompt do classificador recebe **para quem é** o agendamento atual (`beneficiario`) e a lista
+  dos **outros agendamentos do cliente hoje**.
+- Regra nova: se a resposta se refere a outro agendamento (outro horário, serviço ou pessoa), ou
+  se não dá para saber qual, `decisao = "indefinido"`. Um novo horário pedido para remarcar ("pode
+  remarcar pra 16h") continua valendo para o atual.
+- "Pedir Esclarecimento no WhatsApp" agora cita o agendamento específico ("Sobre o Corte Baixo na
+  Máquina de hoje às 15h: você quer confirmar, cancelar ou remarcar?"). O lembrete também mostra
+  "(para X)" quando não é o próprio cliente.
+- Regra de texto: nunca inventar nomes. Só o "Nome do cliente" e, se houver, o nome em
+  `beneficiario`. Num teste a IA chamou o cliente de "Ana" sem esse nome existir nos dados.
+
+Limitação conhecida (já existia): depois de "Pedir Esclarecimento", o loop segue sem esperar a
+resposta. O que o cliente responder chega no workflow de Agendamento, que trata cancelar/remarcar
+com a mesma regra de "não adivinhar qual agendamento".
+
 ## Error Workflow centralizado (2026-09-24)
 
 `settings.errorWorkflow` deste workflow, configurado direto na instância n8n, aponta para o

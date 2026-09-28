@@ -82,6 +82,13 @@ Até esse ambiente existir, o Grupo B fica **não executado** — não marcar co
 | 27d | Data inválida seguida de pedido de sugestão ("quero dia 30/02/2027" → "veja uma data anterior a esse dia") — a conversa da execução 1177 | Na 2ª mensagem oferece opções da lista em vez de insistir numa data específica |
 | 27e | Calendar fora do ar ao sugerir (fixe `Buscar Eventos dos Próximos Dias` com `[{ "error": "..." }]`) | `horarios_livres` = "INDISPONÍVEL"; a IA pede dia/horário de preferência e **não** inventa disponibilidade |
 | 28 | Resposta da IA fora do schema (`Model output doesn't fit required format`) — não dá pra forçar no workflow real; testar num workflow isolado com o mesmo agente + um schema impossível | Parser roda 2x (retry); na 2ª falha: `Avisar Cliente Sobre Falha da IA` → `Escalar Falha da IA para a Equipe` com nome, telefone, mensagem e motivo na mensagem de erro; nada fica sem resposta pro cliente |
+| 30 | **Cliente com 2+ agendamentos ativos pede pra cancelar com referência ambígua** — "cancelar o corte de hoje para minha esposa" com 2 agendamentos hoje (a mensagem da execução 1246). Fixe a **mesma** lista de linhas em `Buscar Agendamentos Ativos do Cliente` e em `Buscar Agendamento para Cancelar/Remarcar`, com horários no futuro no momento do teste | `agendamento_alvo = ""`, `Identificar Agendamento Escolhido (Cancelar)` → `precisa_escolher: true` → `Perguntar Qual Agendamento no WhatsApp` listando os de hoje; **`Cancelar Evento no Calendar` não executa**; texto nunca diz "cancelei" |
+| 30b | Mesmo cenário com "o da minha esposa" (sem dia), "o mais cedo", "o corte", "meu horário" | Pergunta qual — não deduz pelo tipo de serviço, pela ordem nem pelo mais recente; nada cancelado |
+| 30c | Mesmo cenário, pedido de **remarcar** ambíguo ("quero remarcar o de hoje") | `Perguntar Qual Agendamento no WhatsApp`; `Atualizar Evento no Calendar` não executa |
+| 30d | Resposta à pergunta (mesmo telefone do 30/30c, execução seguinte): "o feminino" / "o das 15h, pra sexta às 16h" | `agendamento_alvo` = o escolhido; cancelar → `Cancelar Evento` com esse `event_id`; remarcar → novo horário validado e `Propor Horário` (só atualiza depois do "sim") |
+| 30e | Referência inequívoca ("cancela o Corte 3D de sexta") com 2+ ativos | Age direto no agendamento certo, sem perguntar |
+| 30f | Cliente com **um único** agendamento ativo: "cancelar meu horário" | Usa esse, sem perguntar à toa |
+| 30g | Pergunta de escolha com data numérica na frase da IA ("dia 02/10") | `mensagem_escolha` troca pela pergunta montada pelo código, com dia por extenso |
 
 ## Grupo B — Integração real
 
@@ -100,6 +107,33 @@ Até esse ambiente existir, o Grupo B fica **não executado** — não marcar co
 ---
 
 ## Registro de execuções
+
+### 2026-09-28 (tarde) — não adivinhar qual agendamento cancelar/remarcar (execução 1246)
+
+Versão testada: Agendamento `78e5f496` (testada como rascunho; publicada em 28/09 depois desta
+rodada, substituindo `a17c64a1`). Planilha fixada: Corte Baixo na Máquina hoje 15h, Corte Feminino Com Lavagem hoje
+17h, Corte 3D sex 02/10 11h, Corte Social na Tesoura sáb 10/10 9h (+ 1 linha `concluido`).
+Execuções às ~11h20–11h30 de São Paulo.
+
+| # | Resultado | Evidência (execução) |
+|---|---|---|
+| 30 | ✅ "Também queria cancelar o corte de hoje para minha esposa" → "Vi que hoje tem dois horários marcados: o Corte Baixo na Máquina às 15h e o Corte Feminino Com Lavagem às 17h. Qual dos dois você quer cancelar?"; `Cancelar Evento` não executou | 1251 |
+| 30b | ✅ "Cancela o mais cedo por favor" e "Preciso cancelar o da minha esposa" → listou os 4 e perguntou; nada cancelado | 1254, 1255, 1259 |
+| 30c | ✅ "Quero remarcar o de hoje" → listou os 2 de hoje e perguntou qual remarcar | 1253 |
+| 30d | ✅ "O feminino" → cancelou `evtFemininoHoje` (não o mais recente); "O das 15h, pra sexta às 16h" → alvo Corte Baixo, 02/10 16:00–16:25, `Propor Horário` | 1252, 1257 |
+| 30e | ✅ "Cancela o Corte 3D de sexta" → cancelou direto `evt3DSexta` | 1256 |
+| 30f | ✅ Um único ativo + "Preciso cancelar meu horário" → cancelou esse sem perguntar | 1258 |
+| 30g | ✅ Frase da IA com "dia 02/10" → trocada pela pergunta do código ("…Corte 3D na sexta-feira, dia 2 de outubro, às 11h…") | 1259 |
+
+Também testados localmente (Luxon, servidor em UTC) o `Identificar Agendamento Escolhido` com os
+dados reais do incidente de 09:02 (resultado: pergunta, não cancela), id inventado pela IA,
+agendamento já passado, nenhuma linha, e o texto de `Confirmar Cancelamento no WhatsApp` (node
+fixado no teste, então o texto não é renderizado pelo n8n; validado fora).
+
+Estado real verificado antes da correção (somente leitura, workflow temporário arquivado): o
+evento `oi7l48sa9r4o86qmtaurtb0nbo` (Corte 3D 02/10 11h) está com `status: "cancelled"` no
+Calendar desde 12:02:35 UTC; a linha da planilha ficou `cancelado`. **Não restaurado**, aguardando
+confirmação com o cliente.
 
 ### 2026-09-28 — sugestão de horários livres + fallback de formato da IA (execução 1177)
 

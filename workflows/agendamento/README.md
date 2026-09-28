@@ -35,6 +35,8 @@ abaixo.
 | Checar Mensagem Duplicada / Mensagem Já Processada? / Registrar Mensagem Processada | Deduplicação por `message_id` (ver "Regras de negócio" abaixo) |
 | Checar Lock do Telefone / Telefone Ocupado? / Registrar Lock do Telefone | Lock de 10s por telefone, evita execuções paralelas do mesmo cliente |
 | Buscar Serviços e Preços / Formatar Lista de Serviços | Lê a planilha de serviços e monta o texto injetado no prompt da IA |
+| Buscar Agendamentos Ativos do Cliente / Formatar Agendamentos Ativos | Lê as linhas do telefone na planilha e injeta no prompt a lista de agendamentos ativos e futuros, com o `event_id` de cada um — é daí que a IA escolhe o `agendamento_alvo` (ver "Qual agendamento cancelar ou remarcar") |
+| Identificar Agendamento Escolhido (Remarcar) / (Cancelar) / Precisa Escolher Qual Agendamento? / Perguntar Qual Agendamento no WhatsApp | Decide qual agendamento alterar sem adivinhar; com 2+ ativos e referência ambígua, pergunta qual antes de agir |
 | Buscar Eventos dos Próximos Dias / Calcular Horários Livres | Lê os eventos do Calendar dos próximos 14 dias e monta as janelas livres injetadas no prompt — é daí que a IA tira as sugestões quando o cliente pede "me sugere uma data" (ver "Sugestão de horários livres") |
 | Interpretar Intenção do Cliente | AI Agent (Claude) — classifica intenção, extrai serviço/data/hora e escreve `confirmacao_texto`. Retry 1x e saída de erro se a resposta não bater com o schema |
 | Avisar Cliente Sobre Falha da IA / Escalar Falha da IA para a Equipe | Saída de erro da IA: avisa o cliente que alguém da equipe vai responder e dispara o Error Workflow (ver "Falha de formato da IA") |
@@ -93,6 +95,9 @@ na seção "Colunas de status e preço na planilha" mais abaixo.
   oferece 2-3 opções tiradas da agenda real, em vez de insistir que ele escolha — ver seção
   dedicada abaixo.
 - **Falha de formato da IA não derruba a conversa** (2026-09-28) — ver seção dedicada abaixo.
+- **Nunca adivinhar qual agendamento cancelar/remarcar** (2026-09-28) — com 2+ agendamentos
+  ativos e referência ambígua, lista e pergunta antes de agir; ver "Qual agendamento cancelar ou
+  remarcar" abaixo.
 
 ## Sincronização de tom com o workflow de lembrete
 
@@ -274,12 +279,16 @@ então essa sincronização é manual e intencional, não automática.
 9. **Buscar Agendamento para Remarcar** — Google Sheets (`read`, com filtro por `telefone`,
    retornando todas as linhas que baterem) → **Filtrar Agendamento Ativo (Remarcar)** (Filter,
    mantém só linhas com `status: "agendado"` ou `"remarcado"`, `alwaysOutputData: true` — ver
-   "Bug corrigido" abaixo) → **Selecionar Agendamento Mais Recente (Remarcar)** (node Limit,
-   mantém só a última linha ativa) → **Encontrou Agendamento Para Remarcar?** (IF checando se
-   `event_id` veio preenchido).
-   - **Não encontrou:** **Redirecionar para Fluxo de Agendar** (Code) → **Tem Dados Completos
-     Para Agendar?**, reentrando no mesmo caminho do branch "agendar" (ver "Remarcar sem
-     agendamento existente" abaixo) — não envia mais aviso de "não encontrei" nem para o fluxo.
+   "Bug corrigido" abaixo) → **Identificar Agendamento Escolhido (Remarcar)** (Code: usa o
+   `agendamento_alvo` da IA, ou o único ativo; nunca adivinha — ver "Qual agendamento cancelar
+   ou remarcar" abaixo) → **Encontrou Agendamento Para Remarcar?** (IF checando se `event_id`
+   veio preenchido).
+   - **Não encontrou:** **Precisa Escolher Qual Agendamento? (Remarcar)** (IF).
+     - **Sim** (2+ ativos e nenhum identificado): **Perguntar Qual Agendamento no WhatsApp**
+       lista os agendamentos e pergunta qual remarcar — nada é alterado.
+     - **Não** (nenhum ativo): **Redirecionar para Fluxo de Agendar** (Code) → **Tem Dados
+       Completos Para Agendar?**, reentrando no mesmo caminho do branch "agendar" (ver "Remarcar
+       sem agendamento existente" abaixo) — não envia aviso de "não encontrei" nem para o fluxo.
    - **Encontrou:** **Tem Novo Horário Para Remarcar?** (IF checando `data_hora_inicio`
      notEmpty — ver "Bug corrigido" abaixo).
      - **Não** (cliente ainda não disse pra quando quer remarcar): reaproveita "Responder
@@ -341,13 +350,18 @@ então essa sincronização é manual e intencional, não automática.
 
 9. **Buscar Agendamento para Cancelar** — Google Sheets (`read`, filtro por `telefone`) →
    **Filtrar Agendamento Ativo (Cancelar)** (Filter, mesma lógica e mesmo bug corrigido do
-   branch "remarcar" acima) → **Selecionar Agendamento Mais Recente (Cancelar)** →
-   **Encontrou Agendamento Para Cancelar?**.
-   - **Não encontrou:** reaproveita o node que avisa que não há agendamento ativo.
+   branch "remarcar" acima) → **Identificar Agendamento Escolhido (Cancelar)** (mesma lógica do
+   branch "remarcar") → **Encontrou Agendamento Para Cancelar?**.
+   - **Não encontrou:** **Precisa Escolher Qual Agendamento? (Cancelar)** (IF).
+     - **Sim** (2+ ativos e nenhum identificado): **Perguntar Qual Agendamento no WhatsApp**
+       lista os agendamentos e pergunta qual cancelar — nada é cancelado.
+     - **Não** (nenhum ativo): reaproveita o node que avisa que não há agendamento ativo.
    - **Encontrou:** **Cancelar Evento no Calendar** (`delete`, usando o `event_id`) →
      **Atualizar Linha na Planilha (Cancelar)** (`update`, casando pela coluna `event_id`,
      grava `status: "cancelado"` e `atualizado_em` — **não apaga mais a linha**, ver "Colunas
-     de status e preço na planilha" abaixo) → confirma o cancelamento no WhatsApp.
+     de status e preço na planilha" abaixo) → **Confirmar Cancelamento no WhatsApp**, com texto
+     montado a partir da linha realmente cancelada (serviço + dia por extenso + horário), não
+     da frase da IA.
 
 ### Saída "consultar" (2026-09-24)
 
@@ -986,6 +1000,50 @@ disponibilidade.
 Limites: só enxerga 14 dias à frente (pra "tem algo em novembro?" a IA pede uma data específica)
 e a lista não inclui a pausa de almoço — o expediente é o mesmo 9h-18h de "Validar Horário de
 Funcionamento".
+
+## Qual agendamento cancelar ou remarcar (2026-09-28)
+
+**Bug de produção (execução 1246, 28/09 às 09:02):** o cliente tinha 4 agendamentos ativos (Corte
+Baixo na Máquina hoje às 10h, Corte Feminino Com Lavagem hoje às 13h, Corte 3D sexta 02/10 às 11h,
+Corte Social na Tesoura 10/10) e pediu "cancelar o corte de hoje para minha esposa". O sistema
+cancelou o **Corte 3D de 02/10**, que nem era de hoje.
+
+A escolha não foi da IA: ela só devolveu `intencao: "cancelar"`, `servico: "corte"`, sem data.
+Quem escolheu foi o node Limit "Selecionar Agendamento Mais Recente (Cancelar)" (`keep:
+lastItems`), que pegava **a última linha ativa da planilha**. Naquele momento, era o Corte 3D que
+tinha acabado de ser remarcado. A IA nunca viu a lista de agendamentos, e mesmo assim escreveu
+"Cancelei aqui o corte da sua esposa marcado pra hoje", mensagem que foi para o cliente. O mesmo
+Limit existia no caminho de remarcar.
+
+**Como funciona agora:**
+
+1. **Buscar Agendamentos Ativos do Cliente** + **Formatar Agendamentos Ativos** (antes da IA)
+   injetam no prompt a seção "AGENDAMENTOS ATIVOS DESTE CLIENTE": uma linha por agendamento
+   ativo e futuro, no formato `[event_id] serviço — dia da semana, dd/MM (AAAA-MM-DD) às HH:mm`.
+2. A regra "QUAL AGENDAMENTO CANCELAR OU REMARCAR" manda a IA preencher o campo novo
+   `agendamento_alvo` (também adicionado ao schema do parser) com o `event_id`, **só** quando o
+   serviço, a data e/ou o horário citados baterem com um único agendamento. Referências como "o
+   de hoje" (havendo 2 hoje), "o corte", "o da minha esposa", "o mais cedo" ou "meu horário" são
+   ambíguas: `agendamento_alvo = ""` e a IA pergunta qual, sem deduzir pelo tipo de serviço, pela
+   ordem ou pelo que foi mexido antes na conversa.
+3. **Identificar Agendamento Escolhido (Cancelar/Remarcar)** (Code, no lugar dos Limit) é a
+   trava determinística:
+   - usa o agendamento cujo `event_id` é o `agendamento_alvo`;
+   - se não houver alvo válido e o cliente tiver só **um** agendamento ativo, usa esse;
+   - com 2+ ativos e nenhum identificado (inclusive um id inventado pela IA), **não escolhe**:
+     sai com `precisa_escolher: true` e a pergunta em `mensagem_escolha`, e **Perguntar Qual
+     Agendamento no WhatsApp** envia essa pergunta. A mensagem é a pergunta da IA, que fica na
+     memória e deixa o próximo "o das 13h" fazer sentido. Se o texto da IA parecer ação
+     concluída ("cancelei", "remarcado"...) ou trouxer data numérica, o código usa em vez dela uma
+     pergunta montada com os dados reais: "Você tem dois agendamentos hoje: Corte Baixo na Máquina
+     às 10h e Corte Feminino Com Lavagem às 13h — qual deles você quer cancelar?".
+   - Agendamento com horário já passado não entra na lista (nem no prompt).
+4. **Confirmar Cancelamento no WhatsApp** deixou de usar a frase da IA: monta o texto com o
+   serviço, o dia e o horário da linha que foi de fato cancelada.
+
+Os nodes "Selecionar Agendamento Mais Recente (...)" foram renomeados para "Identificar
+Agendamento Escolhido (...)". As menções ao nome antigo nas seções de bugs anteriores descrevem o
+comportamento da época.
 
 ## Falha de formato da IA (2026-09-28)
 
